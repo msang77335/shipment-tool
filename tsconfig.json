@@ -1,0 +1,29 @@
+{
+	"compilerOptions": {
+		"allowJs": true,
+		"resolveJsonModule": true,
+		"experimentalDecorators": true,
+		"module": "commonjs",
+		"esModuleInterop": true,
+		"noImplicitAny": false,
+		"removeComments": true,
+		"preserveConstEnums": true,
+		"emitDecoratorMetadata": true,
+		"allowSyntheticDefaultImports": true,
+		"sourceMap": true,
+		"pretty": true,
+		"target": "es6",
+		"outDir": "dist",
+		"skipLibCheck": true
+	},
+	"include": [
+		"./**/*",
+		"libs-compiler/*.ts",
+		"defined/*.json"
+	],
+	"exclude": [
+		"node_modules/**/*",
+		"test",
+		"dist"
+	]
+}
