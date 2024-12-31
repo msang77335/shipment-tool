@@ -9,7 +9,6 @@ import { ShipmentFactory } from "../../../domain/Shipment.factory";
 import { FilterOperator } from "../../../infracstructure/queries/filter-operator";
 import { LogisticsInfoDto } from "../../../interface/dtos/shipment/LookupShipment.dto";
 import { SHIPMENT_TRACKING_CONNECTOR_TYPES } from "../../../SHIPMENT_TRACKING_CONNECTOR_TYPES";
-import { lookupQueue } from "../../events/shipment/lookupQueue";
 import { ProcessLookupShipmentsEvent } from "../../events/shipment/processLookupShipment.events";
 import { LookupShipmentsCommand } from "./LookupShipments.command";
 import { LookupShipmentsResult } from "./LookupShipments.result";
@@ -86,9 +85,6 @@ export class LookupShipmentsHandler
 
 		// Lưu thông tin Shipment
 		await this.shipmentRepository.save(shipment);
-
-		// Lưu vào Queue để tra cứu
-		lookupQueue.enqueue(logistics);
 
 		return shipment;
 	}

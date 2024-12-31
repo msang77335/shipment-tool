@@ -49,12 +49,17 @@ export class GHNApiHelper {
       shipment.lookupStatus = "SUCCESS";
       shipment.events = events ? orderBy(events, ['time'], ['desc']) : [];
       shipment.resp = response?.data;
+      shipment.note = ""
 
       return shipment;
     } catch (error) {
 
       if (error?.response?.status === ERROR_STATUS_CODES.TOO_MANY_REQUESTS) {
         shipment.note = "Quá nhiều yêu cầu";
+        shipment.lookupStatus = "FAILED";
+      } else if (error?.response?.status === ERROR_STATUS_CODES.FORBIDDEN) {
+        shipment.note = "Tra cứu bị từ chối";
+        shipment.lookupStatus = "FAILED";
       } else {
         shipment.lookupStatus = "FAILED";
         const errorMessage = error?.response?.data?.code_message_value || error?.response?.data?.message || "";
