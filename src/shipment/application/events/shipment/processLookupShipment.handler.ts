@@ -1,15 +1,19 @@
 import { inject, injectable } from "inversify";
-import { isNull } from "lodash";
 import { EventsHandler, IEventHandler } from "ts-simple-cqrs";
 import { SVC_ENV } from "../../../../../svc-env";
 import { Logger } from "../../../../lib";
 import { ShipmentAPIHandler } from "../../../apis";
 import { LOGISTIC_PROVIDER, LOGISTIC_PROVIDER_CODES, STATUS } from "../../../domain/constants";
 import { ShipmentRepository } from "../../../domain/repository";
+import { Shipment } from "../../../domain/Shipment";
+import { FilterOperator } from "../../../infracstructure/queries/filter-operator";
 import { LogisticsInfoDto } from "../../../interface/dtos/shipment/LookupShipment.dto";
 import { SHIPMENT_TRACKING_CONNECTOR_TYPES } from "../../../SHIPMENT_TRACKING_CONNECTOR_TYPES";
-import { lookupQueue } from "./lookupQueue";
+import { FilterAndData, FilterBuilder } from "../../queries/commons";
 import { ProcessLookupShipmentsEvent } from "./processLookupShipment.events";
+import { filterMapping } from "../../../infracstructure/queries/filter-mapping";
+
+let eventStatus: 'READY' | 'LOCKED' = 'READY';
 
 @injectable()
 @EventsHandler(ProcessLookupShipmentsEvent)
@@ -23,20 +27,31 @@ export class ProcessLookupShipmentsEventHandler implements IEventHandler<Process
 	) { }
 
 	public async handle(): Promise<void> {
-		const queueStatus = lookupQueue.getStatus();
 		this.loggerExecuteName = `ProcessLookupShipmentsEventHandler`;
-		
+
 		try {
-			if(queueStatus === 'LOCKED') return;
+			if (eventStatus === 'LOCKED') return;
 			this.logger.info(`Start ${this.loggerExecuteName}`);
 
-			const processNext = () => {
-				const logistics = lookupQueue.dequeue();
+			const processNext = async () => {
+				// CLOCK event
+				eventStatus = 'LOCKED';
 
-				// Queue LOCKED thì không làm gì
-				if(isNull(logistics)) return;
+				const filter = FilterBuilder.init<FilterAndData>()
+					.withData("lookupStatus", STATUS.PROCESSING, FilterOperator.EQUAL)
+					.build();
 
-				this.processLookupShipment(logistics);
+				const filterMapped = filterMapping(filter);
+
+				const shipment = await this.shipmentRepository.findOne(filterMapped);
+
+				if (!shipment) {
+					// Không có Shipment nào PROCESSING không làm gì UN CLOCK event
+					eventStatus = 'READY';
+					return
+				}
+
+				this.processLookupShipment(shipment);
 
 				// Call API
 				setTimeout(processNext, +SVC_ENV.get().LOOKUP_API_CALL_INTERVAL);
@@ -49,7 +64,8 @@ export class ProcessLookupShipmentsEventHandler implements IEventHandler<Process
 		}
 	}
 
-	private async processLookupShipment(logistics: LogisticsInfoDto): Promise<any> {
+	private async processLookupShipment(shipment: Shipment): Promise<any> {
+		const logistics = shipment.properties().logistics
 		// Xác định Provider
 		const providerAPI = new ShipmentAPIHandler(this.logger).createProvider(this.getProviderCode(logistics));
 		if (!providerAPI) {
@@ -59,15 +75,6 @@ export class ProcessLookupShipmentsEventHandler implements IEventHandler<Process
 
 		// Tra cứu Shipment theo từng Provider
 		const lookupResp = await providerAPI.getShipment(logistics.trackingCode);
-
-		// Lấy Shipment đã khởi tạo. Lookup status => PROCESSING
-		const shipment = await this.shipmentRepository.findOne({
-			"logistics.provider": logistics.provider,
-			"logistics.trackingCode": logistics.trackingCode,
-			"lookupStatus": STATUS.PROCESSING,
-		});
-
-		if(!shipment) return;
 
 		// Cập nhật kết quả tra cứu vào Shipment
 		shipment.updateLookupResult(lookupResp);

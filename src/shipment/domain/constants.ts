@@ -12,7 +12,6 @@ export const LOGISTIC_PROVIDER = {
   "GHN - Hàng Cồng Kềnh": "GHN",
   "Ninja Van Vietnam": "NINJA-VAN",
   "Ninja Van": "NINJA-VAN",
-  "GHTK": "GHTK"
 }
 
 export const STATUS = {

@@ -6,7 +6,8 @@ import { NinjaVanApiHelper } from "./ninja-van";
 import { SPXApiHelper } from "./spx";
 
 export const ERROR_STATUS_CODES = {
-	TOO_MANY_REQUESTS: 429
+	TOO_MANY_REQUESTS: 429,
+	FORBIDDEN: 403
 }
 
 export interface GetShipmentResp {

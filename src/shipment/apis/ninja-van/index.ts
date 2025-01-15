@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { orderBy, toString } from "lodash";
-import { ERROR_STATUS_CODES, GetShipmentResp } from "..";
+import { GetShipmentResp } from "..";
 import { SVC_ENV } from "../../../../svc-env";
 import { Logger } from "../../../lib";
 import { Event } from "../../domain/Shipment";

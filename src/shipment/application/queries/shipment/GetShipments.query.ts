@@ -15,12 +15,17 @@ export class GetShipmentsQuery extends BaseQuery {
     super();
     Object.assign(this, props);
 
-		if (!this.pageIndex) {
+		if (!props.pageIndex) {
 			this.pageIndex = 1;
 		}
 
-		if (!this.pageSize) {
+		if (!props.pageSize) {
 			this.pageSize = 20;
 		}
+
+    if(!props.sortBy && !props.sortType) {
+      this.sortBy = "createdAt";
+      this.sortType = -1
+    }
   }
 }
