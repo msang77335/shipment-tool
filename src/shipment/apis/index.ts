@@ -10,6 +10,12 @@ export const ERROR_STATUS_CODES = {
 	FORBIDDEN: 403
 }
 
+export const ERROR_MESSAGES = {
+	TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
+	FORBIDDEN: 'FORBIDDEN',
+	NINJA_VAN_NOT_FOUND: "NINJA_VAN_NOT_FOUND"
+}
+
 export interface GetShipmentResp {
 	lookupStatus: keyof typeof STATUS,
 	status?: string;
