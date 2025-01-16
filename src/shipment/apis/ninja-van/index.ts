@@ -1,10 +1,10 @@
 import axios, { AxiosError } from "axios";
 import { orderBy, toString } from "lodash";
-import { GetShipmentResp } from "..";
+import { ERROR_MESSAGES, GetShipmentResp } from "..";
 import { SVC_ENV } from "../../../../svc-env";
 import { Logger } from "../../../lib";
 import { Event } from "../../domain/Shipment";
-import { ERROR_CODES, ERROR_MESSAGES, EVENT_CODES, EVENT_MESSAGES } from "./constants";
+import { ERROR_CODES, EVENT_CODES, EVENT_MESSAGES } from "./constants";
 
 export class NinjaVanApiHelper {
   private readonly logger: Logger;
@@ -77,7 +77,7 @@ export class NinjaVanApiHelper {
 
   private getMessageError(error: AxiosError<any>): string {
     if (error?.response?.data?.error?.code === ERROR_CODES.NOT_FOUND) {
-      return ERROR_MESSAGES.NOT_FOUND;
+      return ERROR_MESSAGES.NINJA_VAN_NOT_FOUND;
     } else {
       return error?.response?.data?.error?.message ?? "";
     }

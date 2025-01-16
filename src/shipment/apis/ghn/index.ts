@@ -1,6 +1,6 @@
 import axios from "axios";
 import { orderBy, toString } from "lodash";
-import { ERROR_STATUS_CODES, GetShipmentResp } from "..";
+import { ERROR_MESSAGES, ERROR_STATUS_CODES, GetShipmentResp } from "..";
 import { SVC_ENV } from "../../../../svc-env";
 import { Logger } from "../../../lib";
 import { Event } from "../../domain/Shipment";
@@ -55,16 +55,15 @@ export class GHNApiHelper {
     } catch (error) {
 
       if (error?.response?.status === ERROR_STATUS_CODES.TOO_MANY_REQUESTS) {
-        shipment.note = "Quá nhiều yêu cầu";
-        shipment.lookupStatus = "FAILED";
+        shipment.note = ERROR_MESSAGES.TOO_MANY_REQUESTS;
       } else if (error?.response?.status === ERROR_STATUS_CODES.FORBIDDEN) {
-        shipment.note = "Tra cứu bị từ chối";
-        shipment.lookupStatus = "FAILED";
+        shipment.note = ERROR_MESSAGES.FORBIDDEN;
       } else {
-        shipment.lookupStatus = "FAILED";
         const errorMessage = error?.response?.data?.code_message_value || error?.response?.data?.message || "";
         shipment.note = errorMessage;
       }
+
+      shipment.lookupStatus = "FAILED";
 
       this.logger.error(`GHNApiHelper getShipment return error: ${JSON.stringify(error)}`);
       return shipment
