@@ -48,7 +48,7 @@ export const ShipmentTrackingConnectorServiceSchema = (ServiceName: string, serv
 			}
 
 			initShipmentTrackingConnectorContainer(CQRSContainer);
-			const { commandBus, queryBus }: SimpleCQRSType = SimpleCQRS.exploreServices({
+			const { commandBus, queryBus, eventBus }: SimpleCQRSType = SimpleCQRS.exploreServices({
 				commands: [
 					LookupShipmentsHandler 
 				],
@@ -66,7 +66,7 @@ export const ShipmentTrackingConnectorServiceSchema = (ServiceName: string, serv
 					logger: serviceBroker.getLogger("shipment-tracking-connector-service"),
 					appConfig,
 				},
-				{ commandBus, queryBus }
+				{ commandBus, queryBus, eventBus }
 			);
 			
 			await Promise.all([
