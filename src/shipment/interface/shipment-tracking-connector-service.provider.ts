@@ -1,10 +1,11 @@
 import { injectable } from "inversify";
-import { ICommandBus, IQueryBus } from "ts-simple-cqrs";
+import { ICommandBus, IEventBus, IQueryBus } from "ts-simple-cqrs";
 import { AppConfig } from "../../../app.config";
 import { Logger } from "../../lib/logger";
 import { Validate, Validator } from "../../lib/ts-class-validator";
 import { LookupShipmentsCommand } from "../application/commands/shipment/LookupShipments.command";
 import { LookupShipmentsResult } from "../application/commands/shipment/LookupShipments.result";
+import { ProcessLookupShipmentsEvent } from "../application/events/shipment/processLookupShipment.events";
 import { GetShipmentsQuery } from "../application/queries/shipment/GetShipments.query";
 import { GetShipmentsResult } from "../application/queries/shipment/GetShipments.result";
 import { GetShipmentsDto } from "./dtos/shipment/GetShipments.dto";
@@ -19,12 +20,14 @@ export interface ShipmentTrackingConnectorServiceProps {
 export interface ShipmentTrackingConnectorServiceOptions {
 	commandBus?: ICommandBus;
 	queryBus?: IQueryBus;
+	eventBus?: IEventBus;
 }
 
 @injectable()
 export class ShipmentTrackingConnectorServiceProvider {
 	public readonly commandBus: ICommandBus;
 	public readonly queryBus: IQueryBus;
+	public readonly eventBus: IEventBus;
 
 	private readonly logger: Logger;
 	private working = false;
@@ -33,6 +36,7 @@ export class ShipmentTrackingConnectorServiceProvider {
 		this.logger = props.logger || console;
 		this.commandBus = opts.commandBus;
 		this.queryBus = opts.queryBus;
+		this.eventBus = opts.eventBus;
 	}
 
 	// Tra cứu Shipments
@@ -61,6 +65,7 @@ export class ShipmentTrackingConnectorServiceProvider {
 		if (this.working) {
 			return;
 		}
+		this.eventBus.publish(new ProcessLookupShipmentsEvent());
 		this.logger.info("Shipment connector service provider has been started");
 		this.working = true;
 	}
