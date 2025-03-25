@@ -7,12 +7,10 @@ import { Event } from "../../domain/Shipment";
 import { ERROR_CODES, EVENT_CODES, EVENT_MESSAGES } from "./constants";
 
 export class NinjaVanApiHelper {
-  private readonly logger: Logger;
   public constructor(
-    logger: Logger,
-  ) {
-    this.logger = logger;
-  }
+    private readonly logger: Logger
+  ) {}
+  
   public async getShipment(trackingCode): Promise<any> {
 
     const axiosConfig = {

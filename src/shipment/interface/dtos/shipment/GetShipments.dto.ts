@@ -12,6 +12,9 @@ export class GetShipmentsDto extends BasePagingDto {
 	public logisticsTrackingCode: string;
 
 	@IsOptional()
+	public ftCode: string;
+
+	@IsOptional()
 	public dateFr: string;
 
 	@IsOptional()

@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { ArrayNotEmpty, IsArray, IsDefined, IsNotEmpty, ValidateNested } from "class-validator";
+import { ArrayNotEmpty, IsArray, IsNotEmpty, IsOptional, ValidateNested } from "class-validator";
 
 export class LookupShipmentsDto {
 	@IsNotEmpty()
@@ -8,6 +8,9 @@ export class LookupShipmentsDto {
   @ValidateNested({ each: true }) 
 	@Type(() => LogisticsInfoDto)
 	public logisticsInfo: LogisticsInfoDto[];
+
+	@IsOptional()
+	public ftCode: string;
 }
 
 export class LogisticsInfoDto {
@@ -16,6 +19,9 @@ export class LogisticsInfoDto {
 
 	@IsNotEmpty()
 	public trackingCode: string;
+
+	@IsOptional()
+	public cellPhone: string;
 }
 
 

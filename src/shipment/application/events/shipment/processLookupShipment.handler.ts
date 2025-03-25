@@ -3,15 +3,11 @@ import { EventsHandler, IEventHandler } from "ts-simple-cqrs";
 import { SVC_ENV } from "../../../../../svc-env";
 import { Logger } from "../../../../lib";
 import { ShipmentAPIHandler } from "../../../apis";
-import { LOGISTIC_PROVIDER, LOGISTIC_PROVIDER_CODES, STATUS } from "../../../domain/constants";
+import { LOGISTIC_PROVIDER, LOGISTIC_PROVIDER_CODES } from "../../../domain/constants";
 import { ShipmentRepository } from "../../../domain/repository";
-import { Shipment } from "../../../domain/Shipment";
-import { FilterOperator } from "../../../infracstructure/queries/filter-operator";
-import { LogisticsInfoDto } from "../../../interface/dtos/shipment/LookupShipment.dto";
+import { Logistics, Shipment } from "../../../domain/Shipment";
 import { SHIPMENT_TRACKING_CONNECTOR_TYPES } from "../../../SHIPMENT_TRACKING_CONNECTOR_TYPES";
-import { FilterAndData, FilterBuilder } from "../../queries/commons";
 import { ProcessLookupShipmentsEvent } from "./processLookupShipment.events";
-import { filterMapping } from "../../../infracstructure/queries/filter-mapping";
 
 let eventStatus: 'READY' | 'LOCKED' = 'READY';
 
@@ -37,13 +33,7 @@ export class ProcessLookupShipmentsEventHandler implements IEventHandler<Process
 				// CLOCK event
 				eventStatus = 'LOCKED';
 
-				const filter = FilterBuilder.init<FilterAndData>()
-					.withData("lookupStatus", STATUS.PROCESSING, FilterOperator.EQUAL)
-					.build();
-
-				const filterMapped = filterMapping(filter);
-
-				const shipment = await this.shipmentRepository.findOne(filterMapped);
+				const shipment = await this.shipmentRepository.findOnReadyLookup();
 
 				if (!shipment) {
 					// Không có Shipment nào PROCESSING không làm gì UN CLOCK event
@@ -74,7 +64,7 @@ export class ProcessLookupShipmentsEventHandler implements IEventHandler<Process
 		}
 
 		// Tra cứu Shipment theo từng Provider
-		const lookupResp = await providerAPI.getShipment(logistics.trackingCode);
+		const lookupResp = await providerAPI.getShipment(logistics.trackingCode, logistics.cellPhone);
 
 		// Cập nhật kết quả tra cứu vào Shipment
 		shipment.updateLookupResult(lookupResp);
@@ -83,7 +73,7 @@ export class ProcessLookupShipmentsEventHandler implements IEventHandler<Process
 		await this.shipmentRepository.save(shipment);
 	}
 
-	private getProviderCode(logistics: LogisticsInfoDto): string {
+	private getProviderCode(logistics: Logistics): string {
 		return LOGISTIC_PROVIDER_CODES[LOGISTIC_PROVIDER[logistics.provider]] ?? "";
 	}
 }

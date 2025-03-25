@@ -2,8 +2,11 @@ import { Logger } from "../../lib";
 import { LOGISTIC_PROVIDER_CODES, STATUS } from "../domain/constants";
 import { Event } from "../domain/Shipment";
 import { GHNApiHelper } from "./ghn";
+import { JTEApiHelper } from "./jte";
 import { NinjaVanApiHelper } from "./ninja-van";
 import { SPXApiHelper } from "./spx";
+
+export const HCM_TIMEZONE = "Asia/Ho_Chi_Minh";
 
 export const ERROR_STATUS_CODES = {
 	TOO_MANY_REQUESTS: 429,
@@ -13,7 +16,9 @@ export const ERROR_STATUS_CODES = {
 export const ERROR_MESSAGES = {
 	TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
 	FORBIDDEN: 'FORBIDDEN',
-	NINJA_VAN_NOT_FOUND: "NINJA_VAN_NOT_FOUND"
+	NINJA_VAN_NOT_FOUND: "NINJA_VAN_NOT_FOUND",
+	JTE_PARSE_HTML: 'JTE_PARSE_HTML',
+	JTE_NOT_FOUND: "JTE_NOT_FOUND"
 }
 
 export interface GetShipmentResp {
@@ -25,13 +30,14 @@ export interface GetShipmentResp {
 }
 
 export interface ShipmentProviderAPI {
-	getShipment(trackingId: string): Promise<any>;
+	getShipment(trackingId: string, cellPhone?: string): Promise<any>;
 }
 
 export class ShipmentAPIHandler {
-	private readonly logger: Logger;
-
-	constructor(logger: Logger) {
+	private readonly logger: Logger
+	constructor(
+		logger: Logger
+	) {
 		this.logger = logger;
 	}
 
@@ -45,6 +51,9 @@ export class ShipmentAPIHandler {
 
 			case LOGISTIC_PROVIDER_CODES["NINJA-VAN"]:
 				return new NinjaVanApiHelper(this.logger);
+
+			case LOGISTIC_PROVIDER_CODES.JTE:
+				return new JTEApiHelper(this.logger);
 
 			default:
 				this.logger.warn(`No provider found for: ${provider}`);

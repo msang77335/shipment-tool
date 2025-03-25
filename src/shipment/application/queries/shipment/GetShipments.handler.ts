@@ -25,7 +25,7 @@ export class GetShipmentsHandler implements IQueryHandler<GetShipmentsQuery, Get
 	public async execute(query: GetShipmentsQuery): Promise<GetShipmentsResult> {
 		this.loggerExecuteName = "GetShipmentsHandler"
 		this.logger.info(`Start ${this.loggerExecuteName} - query:`, JSON.stringify(query));
-		const { lookupStatus, logisticsTrackingCode, logisticsProvider } = query;
+		const { lookupStatus, logisticsTrackingCode, logisticsProvider, ftCode } = query;
 
 		const pagingOptions = createPaginationOptions(query);
 
@@ -45,6 +45,7 @@ export class GetShipmentsHandler implements IQueryHandler<GetShipmentsQuery, Get
 			.withData("lookupStatus", lookupStatus, FilterOperator.EQUAL)
 			.withData("logistics.trackingCode", logisticsTrackingCode, FilterOperator.EQUAL)
 			.withData("logistics.provider", logisticsProvider, FilterOperator.EQUAL)
+			.withData("ftCode", ftCode, FilterOperator.EQUAL)
 			.build();
 
 		const filterMapped = filterMapping(filter);

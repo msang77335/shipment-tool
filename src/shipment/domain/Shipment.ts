@@ -10,10 +10,12 @@ export interface Event {
 export interface Logistics {
   provider: string;
   trackingCode: string;
+  cellPhone?: string;
 }
 
 export interface ShipmentProperties {
   readonly id: string;
+  readonly ftCode: string;
   readonly logistics: Logistics;
   readonly lookupStatus: keyof typeof STATUS;
   readonly note?: string;
@@ -29,10 +31,12 @@ export interface Shipment {
   commit: () => void;
   publishEvent: (event: IEvent) => void;
   updateLookupResult: (lookupResult: GetShipmentResp) => void;
+  updateFTCode: (ftCode: string) => void;
 }
 
 export class ShipmentImplement extends AggregateRoot implements Shipment {
   public id: string;
+  public ftCode: string;
   public logistics: Logistics;
   public lookupStatus: keyof typeof STATUS;
   public note?: string;
@@ -50,6 +54,7 @@ export class ShipmentImplement extends AggregateRoot implements Shipment {
   public properties(): ShipmentProperties {
     return {
       id: this.id,
+      ftCode: this.ftCode,
       logistics: this.logistics,
       lookupStatus: this.lookupStatus,
       note: this.note,
@@ -67,6 +72,12 @@ export class ShipmentImplement extends AggregateRoot implements Shipment {
     this.note = lookupResult.note;
     this.events = lookupResult.events;
     this.resp = lookupResult.resp;
+    this.updatedAt = new Date();
+  }
+
+  public updateFTCode(ftCode: string) {
+    this.ftCode = ftCode;
+    this.updatedAt = new Date();
   }
 
   public publishEvent(event: IEvent): void {

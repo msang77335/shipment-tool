@@ -10,6 +10,7 @@ export const REQUIRED_KEY = [
 	"SPX_API_KEY",
 	"GHN_API_ENDPOINT",
 	"NINJA_VAN_API_ENDPOINT",
+	"JTE_API_ENDPOINT",
 	"LOOKUP_API_CALL_INTERVAL",
 
 	"VAULT_ENDPOINT",
@@ -28,6 +29,7 @@ export interface IEnvironmentField {
 	readonly SPX_API_KEY: string;
 	readonly GHN_API_ENDPOINT: string;
 	readonly NINJA_VAN_API_ENDPOINT: string;
+	readonly JTE_API_ENDPOINT: string;
 	readonly LOOKUP_API_CALL_INTERVAL: string;
 
 	readonly VAULT_ENDPOINT: string;

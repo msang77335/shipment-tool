@@ -8,6 +8,7 @@ export class GetShipmentsQuery extends BaseQuery {
   public readonly lookupStatus: "SUCCESS" | "FAILED";
   public readonly logisticsProvider: string;
   public readonly logisticsTrackingCode: string;
+  public readonly ftCode: string;
   public readonly dateFr: string;
   public readonly dateTo: string;
 
