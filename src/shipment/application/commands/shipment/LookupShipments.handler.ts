@@ -1,5 +1,5 @@
 import { inject, injectable } from "inversify";
-import { uniqWith } from "lodash";
+import { isEmpty, uniqWith } from "lodash";
 import { ResponseHelper } from "neopay-lib/helpers";
 import { CommandHandler, ICommandHandler, IEventBus } from "ts-simple-cqrs";
 import { APP_TYPES } from "../../../../../APP_TYPES";
@@ -12,6 +12,7 @@ import { SHIPMENT_TRACKING_CONNECTOR_TYPES } from "../../../SHIPMENT_TRACKING_CO
 import { ProcessLookupShipmentsEvent } from "../../events/shipment/processLookupShipment.events";
 import { LookupShipmentsCommand } from "./LookupShipments.command";
 import { LookupShipmentsResult } from "./LookupShipments.result";
+import { LOGISTIC_PROVIDER_KEYS } from "../../../domain/constants";
 
 @injectable()
 @CommandHandler(LookupShipmentsCommand)
@@ -33,7 +34,7 @@ export class LookupShipmentsHandler
 		this.loggerExecuteName = `LookupShipmentsHandler`;
 		this.logger.info(`Start ${this.loggerExecuteName} - command:`, JSON.stringify(command));
 		try {
-			const { logisticsInfo } = command;
+			const { logisticsInfo, ftCode } = command;
 
 			// Loại trùng
 			const uniqLogistics = uniqWith(logisticsInfo, (a, b) => a.provider === b.provider && a.trackingCode === b.trackingCode);
@@ -47,38 +48,72 @@ export class LookupShipmentsHandler
 			}
 
 			// Shipment đã tra cứu
-			const matchedShipments = await this.shipmentRepository.find(filter);
+			const lookedShipments = await this.shipmentRepository.find(filter);
 
-			// Filter Shipment Chưa tra cứu
-			const unmatchedShipments = uniqLogistics.filter(logistics =>
-				matchedShipments.every(shipment => {
-					const { provider, trackingCode } = shipment.properties().logistics;
-					return `${provider}-${trackingCode}` !== `${logistics.provider}-${logistics.trackingCode}`;
-				})
+			const matchedLogisticsSet = new Set();
+			const matchedShipmentsMap = new Map();
+
+			lookedShipments.forEach(shipment => {
+				const { provider, trackingCode, cellPhone } = shipment.properties().logistics;
+				const key = cellPhone ? `${provider}-${trackingCode}-${cellPhone}` : `${provider}-${trackingCode}`;
+
+				matchedLogisticsSet.add(key);
+				matchedShipmentsMap.set(key, shipment);
+			});
+
+
+			const updatedShipments = [];
+
+			uniqLogistics.forEach(logistics => {
+				const { provider, trackingCode, cellPhone } = logistics;
+				const key = cellPhone ? `${provider}-${trackingCode}-${cellPhone}` : `${provider}-${trackingCode}`;
+				const shipment = matchedShipmentsMap.get(key);
+
+				if (!isEmpty(ftCode) && shipment && shipment.properties().ftCode !== ftCode) {
+					shipment.updateFTCode(ftCode);
+					updatedShipments.push(shipment);
+				}
+			});
+
+			// Cập nhật Shipments khác FT code
+			await Promise.all(updatedShipments.map((shipment) => this.shipmentRepository.save(shipment)))
+
+			// Filter shipment chưa tra cứu
+			const unmatchedShipments = uniqLogistics.filter(
+				({ provider, trackingCode, cellPhone }) => {
+					let key = `${provider}-${trackingCode}`
+					if ([LOGISTIC_PROVIDER_KEYS["J&T Express"]].includes(provider) && cellPhone) {
+						key = `${provider}-${trackingCode}-${cellPhone}`
+					}
+					return !matchedLogisticsSet.has(key)
+				}
 			);
 
-			// Khởi tạo Shipments
-			const shipments = await Promise.all(
-				unmatchedShipments.map((logistics) => this.processInitShipment(logistics))
-			);
+			// Khởi tạo shipments
+			await Promise.all(unmatchedShipments.map(async shipment => this.processInitShipment(shipment, ftCode)));
 
 			// Trigger event tra cứu
 			this.eventBus.publish(new ProcessLookupShipmentsEvent());
 
-			return ResponseHelper.resOK([...matchedShipments, ...shipments]);
+			return ResponseHelper.resOK(true);
 		} catch (error) {
 			this.logger.error(`${this.loggerExecuteName} => failed with error: ${JSON.stringify(error)}`);
 		}
 	}
 
-	private async processInitShipment(logistics: LogisticsInfoDto): Promise<any> {
+	private async processInitShipment(logistics: LogisticsInfoDto, ftCode: string): Promise<any> {
 		// Khởi tạo Shipment trạng thái PROCESSING
 		const shipmentId = await this.shipmentRepository.newId();
 
 		const shipment = this.shipmentFactory.create({
 			id: shipmentId,
 			lookupStatus: "PROCESSING",
-			logistics: logistics,
+			logistics: {
+				provider: logistics.provider,
+				trackingCode: logistics.trackingCode,
+				cellPhone: logistics.cellPhone
+			},
+			ftCode: ftCode,
 			updatedAt: new Date(),
 			createdAt: new Date(),
 		})

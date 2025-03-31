@@ -9,13 +9,11 @@ import { Event } from "../../domain/Shipment";
 
 @injectable()
 export class SPXApiHelper {
-  private readonly logger: Logger;
 
   public constructor(
-    logger: Logger,
-  ) {
-    this.logger = logger;
-  }
+    private readonly logger: Logger
+  ) {}
+
   public async getShipment(trackingCode): Promise<any> {
 
     const timestamps = Math.floor(Date.now() / 1e3);

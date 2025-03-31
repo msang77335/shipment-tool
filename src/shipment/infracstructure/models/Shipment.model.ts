@@ -30,6 +30,10 @@ class Logistics {
 	@prop()
 	@Expose()
 	public trackingCode: string;
+
+	@prop()
+	@Expose()
+	public cellPhone: string;
 }
 
 @Exclude()
@@ -42,6 +46,10 @@ export class ShipmentSchema extends DocumentCT {
 	@prop()
 	@Expose()
 	public id: string;
+
+	@prop()
+	@Expose()
+	public ftCode: string;
 
 	@prop({ _id: false }) 
 	@Expose()

@@ -7,6 +7,8 @@ import { Shipment, ShipmentProperties } from "../../domain/Shipment";
 import { ShipmentFactory } from "../../domain/Shipment.factory";
 import { ShipmentRepository } from "../../domain/repository";
 import { ShipmentModel, ShipmentSchema } from "../models/Shipment.model";
+import { STATUS } from "../../domain/constants";
+
 @injectable()
 export class ShipmentRepositoryImplement implements ShipmentRepository {
 	public constructor(
@@ -45,6 +47,13 @@ export class ShipmentRepositoryImplement implements ShipmentRepository {
 
 	public async findOne(filter: object): Promise<Shipment> {
 		const model = await ShipmentModel.findOne(filter).lean();
+		return model ? this.modelToEntity(model) : null;
+	}
+
+	public async findOnReadyLookup(): Promise<Shipment> {
+		const model = await ShipmentModel.findOne({ lookupStatus: STATUS.PROCESSING })
+			.sort({ createdAt: 1 })
+			.lean();
 		return model ? this.modelToEntity(model) : null;
 	}
 

@@ -5,12 +5,10 @@ import { SVC_ENV } from "../../../../svc-env";
 import { Logger } from "../../../lib";
 import { Event } from "../../domain/Shipment";
 export class GHNApiHelper {
-  private readonly logger: Logger;
   public constructor(
-    logger: Logger,
-  ) {
-    this.logger = logger;
-  }
+    private readonly logger: Logger
+  ) {}
+  
   public async getShipment(trackingCode): Promise<any> {
 
     const axiosConfig = {
