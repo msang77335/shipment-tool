@@ -4,6 +4,7 @@ import { ResponseHelper } from "neopay-lib/helpers";
 import { CommandHandler, ICommandHandler, IEventBus } from "ts-simple-cqrs";
 import { APP_TYPES } from "../../../../../APP_TYPES";
 import { Logger } from "../../../../lib/logger";
+import { LOGISTIC_PROVIDERS } from "../../../domain/constants";
 import { ShipmentRepository } from "../../../domain/repository";
 import { ShipmentFactory } from "../../../domain/Shipment.factory";
 import { FilterOperator } from "../../../infracstructure/queries/filter-operator";
@@ -12,7 +13,6 @@ import { SHIPMENT_TRACKING_CONNECTOR_TYPES } from "../../../SHIPMENT_TRACKING_CO
 import { ProcessLookupShipmentsEvent } from "../../events/shipment/processLookupShipment.events";
 import { LookupShipmentsCommand } from "./LookupShipments.command";
 import { LookupShipmentsResult } from "./LookupShipments.result";
-import { LOGISTIC_PROVIDER_KEYS } from "../../../domain/constants";
 
 @injectable()
 @CommandHandler(LookupShipmentsCommand)
@@ -55,34 +55,39 @@ export class LookupShipmentsHandler
 
 			lookedShipments.forEach(shipment => {
 				const { provider, trackingCode, cellPhone } = shipment.properties().logistics;
-				const key = cellPhone ? `${provider}-${trackingCode}-${cellPhone}` : `${provider}-${trackingCode}`;
+				let key = `${provider}-${trackingCode}`
+				if ([LOGISTIC_PROVIDERS["J&T Express"]].includes(provider) && cellPhone) {
+					key = `${provider}-${trackingCode}-${cellPhone}`
+				}
 
 				matchedLogisticsSet.add(key);
 				matchedShipmentsMap.set(key, shipment);
 			});
 
-
-			const updatedShipments = [];
+			const needUpdateFTCodeShipments = [];
 
 			uniqLogistics.forEach(logistics => {
 				const { provider, trackingCode, cellPhone } = logistics;
-				const key = cellPhone ? `${provider}-${trackingCode}-${cellPhone}` : `${provider}-${trackingCode}`;
+				let key = `${provider}-${trackingCode}`
+				if ([LOGISTIC_PROVIDERS["J&T Express"]].includes(provider) && cellPhone) {
+					key = `${provider}-${trackingCode}-${cellPhone}`
+				}
 				const shipment = matchedShipmentsMap.get(key);
 
 				if (!isEmpty(ftCode) && shipment && shipment.properties().ftCode !== ftCode) {
 					shipment.updateFTCode(ftCode);
-					updatedShipments.push(shipment);
+					needUpdateFTCodeShipments.push(shipment);
 				}
 			});
 
 			// Cập nhật Shipments khác FT code
-			await Promise.all(updatedShipments.map((shipment) => this.shipmentRepository.save(shipment)))
+			await Promise.all(needUpdateFTCodeShipments.map((shipment) => this.shipmentRepository.save(shipment)))
 
 			// Filter shipment chưa tra cứu
 			const unmatchedShipments = uniqLogistics.filter(
 				({ provider, trackingCode, cellPhone }) => {
 					let key = `${provider}-${trackingCode}`
-					if ([LOGISTIC_PROVIDER_KEYS["J&T Express"]].includes(provider) && cellPhone) {
+					if ([LOGISTIC_PROVIDERS["J&T Express"]].includes(provider) && cellPhone) {
 						key = `${provider}-${trackingCode}-${cellPhone}`
 					}
 					return !matchedLogisticsSet.has(key)

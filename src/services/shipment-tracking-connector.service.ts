@@ -11,6 +11,7 @@ import { SVC_ENV } from "../../svc-env";
 import { NeoPayError } from "../lib";
 import { trackingIn, trackingOut } from "../middlewares";
 import { LookupShipmentsHandler } from "../shipment/application/commands/shipment/LookupShipments.handler";
+import { ProcessLookupJTEShipmentsEventHandler } from "../shipment/application/events/shipment/processLookupJTEShipment.handler";
 import { ProcessLookupShipmentsEventHandler } from "../shipment/application/events/shipment/processLookupShipment.handler";
 import { GetShipmentsHandler } from "../shipment/application/queries/shipment/GetShipments.handler";
 import { initShipmentTrackingConnectorContainer } from "../shipment/container";
@@ -53,7 +54,8 @@ export const ShipmentTrackingConnectorServiceSchema = (ServiceName: string, serv
 					LookupShipmentsHandler 
 				],
 				events: [
-					ProcessLookupShipmentsEventHandler
+					ProcessLookupShipmentsEventHandler,
+					ProcessLookupJTEShipmentsEventHandler
 				],
 				queries: [
 					GetShipmentsHandler

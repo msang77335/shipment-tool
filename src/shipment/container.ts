@@ -4,10 +4,12 @@ import { SHIPMENT_TRACKING_CONNECTOR_TYPES } from "./SHIPMENT_TRACKING_CONNECTOR
 import { IntegrationEventPublisher } from "./application/events/integration";
 import { ShipmentFactory } from "./domain/Shipment.factory";
 import {
+	ConfigRepository,
 	ShipmentRepository
 } from "./domain/repository";
 import { LoggerImplement } from "./infracstructure/logger/logger";
 import { MoleculerEventPublisherImplement } from "./infracstructure/message/moleculer-event.publisher";
+import { ConfigRepositoryImplement } from "./infracstructure/repositories/Config.repository";
 import { ShipmentRepositoryImplement } from "./infracstructure/repositories/Shipment.repository";
 
 export const initShipmentTrackingConnectorContainer = (container: Container) => {
@@ -16,4 +18,5 @@ export const initShipmentTrackingConnectorContainer = (container: Container) => 
 
 	container.bind<ShipmentRepository>(SHIPMENT_TRACKING_CONNECTOR_TYPES.ShipmentRepository).to(ShipmentRepositoryImplement);
 	container.bind<ShipmentFactory>(SHIPMENT_TRACKING_CONNECTOR_TYPES.ShipmentFactory).to(ShipmentFactory);
+	container.bind<ConfigRepository>(SHIPMENT_TRACKING_CONNECTOR_TYPES.ConfigRepository).to(ConfigRepositoryImplement);
 };
