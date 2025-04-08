@@ -5,9 +5,9 @@ import { SHIPMENT_TRACKING_CONNECTOR_TYPES } from "../../SHIPMENT_TRACKING_CONNE
 import { PagingResult } from '../../application/queries/commons';
 import { Shipment, ShipmentProperties } from "../../domain/Shipment";
 import { ShipmentFactory } from "../../domain/Shipment.factory";
+import { STATUS } from "../../domain/constants";
 import { ShipmentRepository } from "../../domain/repository";
 import { ShipmentModel, ShipmentSchema } from "../models/Shipment.model";
-import { STATUS } from "../../domain/constants";
 
 @injectable()
 export class ShipmentRepositoryImplement implements ShipmentRepository {
@@ -50,11 +50,29 @@ export class ShipmentRepositoryImplement implements ShipmentRepository {
 		return model ? this.modelToEntity(model) : null;
 	}
 
-	public async findOnReadyLookup(): Promise<Shipment> {
-		const model = await ShipmentModel.findOne({ lookupStatus: STATUS.PROCESSING })
+	public async findOneReadyLookup(providers: string[]): Promise<Shipment> {
+		const model = await ShipmentModel.findOne({
+			lookupStatus: STATUS.PROCESSING,
+			"logistics.provider": { "$in": providers }
+		})
 			.sort({ createdAt: 1 })
 			.lean();
 		return model ? this.modelToEntity(model) : null;
+	}
+
+	public async findReadyLookup(provider: string,  limit: number, cellPhone?: string): Promise<Shipment[]> {
+		const filter: any = {
+			lookupStatus: STATUS.PROCESSING,
+			"logistics.provider": provider
+		}
+		if (cellPhone) {
+			filter["logistics.cellPhone"] = cellPhone;
+		}
+		const models = await ShipmentModel.find(filter)
+			.sort({ createdAt: 1 })
+			.limit(limit ?? 9) 
+			.lean();
+		return models.map(model => this.modelToEntity(model));
 	}
 
 	public async listPaging(filter: object, options: object): Promise<PagingResult<Shipment>> {

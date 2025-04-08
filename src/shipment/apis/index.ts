@@ -2,7 +2,6 @@ import { Logger } from "../../lib";
 import { LOGISTIC_PROVIDER_CODES, STATUS } from "../domain/constants";
 import { Event } from "../domain/Shipment";
 import { GHNApiHelper } from "./ghn";
-import { JTEApiHelper } from "./jte";
 import { NinjaVanApiHelper } from "./ninja-van";
 import { SPXApiHelper } from "./spx";
 
@@ -18,7 +17,8 @@ export const ERROR_MESSAGES = {
 	FORBIDDEN: 'FORBIDDEN',
 	NINJA_VAN_NOT_FOUND: "NINJA_VAN_NOT_FOUND",
 	JTE_PARSE_HTML: 'JTE_PARSE_HTML',
-	JTE_NOT_FOUND: "JTE_NOT_FOUND"
+	JTE_NOT_FOUND: "JTE_NOT_FOUND",
+	LOOKUP_ERROR: "LOOKUP_ERROR"
 }
 
 export interface GetShipmentResp {
@@ -51,9 +51,6 @@ export class ShipmentAPIHandler {
 
 			case LOGISTIC_PROVIDER_CODES["NINJA-VAN"]:
 				return new NinjaVanApiHelper(this.logger);
-
-			case LOGISTIC_PROVIDER_CODES.JTE:
-				return new JTEApiHelper(this.logger);
 
 			default:
 				this.logger.warn(`No provider found for: ${provider}`);

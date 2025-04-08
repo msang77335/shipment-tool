@@ -6,6 +6,8 @@ export const REQUIRED_KEY = [
 	"PORT",
 	"MONGO_URI",
 
+	"CONFIG_SERVICE",
+
 	"SPX_API_ENDPOINT",
 	"SPX_API_KEY",
 	"GHN_API_ENDPOINT",
@@ -24,6 +26,8 @@ export interface IEnvironmentField {
 	readonly SERVICE_NAME: string;
 	readonly PORT: string;
 	readonly MONGO_URI: string;
+
+	readonly CONFIG_SERVICE: string;
 
 	readonly SPX_API_ENDPOINT: string;
 	readonly SPX_API_KEY: string;
