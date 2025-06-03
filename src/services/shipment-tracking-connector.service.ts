@@ -16,6 +16,7 @@ import { ProcessLookupShipmentsEventHandler } from "../shipment/application/even
 import { GetShipmentsHandler } from "../shipment/application/queries/shipment/GetShipments.handler";
 import { initShipmentTrackingConnectorContainer } from "../shipment/container";
 import { ShipmentTrackingConnectorServiceProvider } from "../shipment/interface/shipment-tracking-connector-service.provider";
+import { ProcessLookupJTEPublicShipmentsHandler } from "../shipment/application/events/shipment/processLookupJTEPublicShipments.handler";
 
 export const ShipmentTrackingConnectorServiceSchema = (ServiceName: string, serviceBroker?: ServiceBroker): ServiceSchema => {
 	let shipmentTrackingConnectorServiceProvider: ShipmentTrackingConnectorServiceProvider;
@@ -55,7 +56,8 @@ export const ShipmentTrackingConnectorServiceSchema = (ServiceName: string, serv
 				],
 				events: [
 					ProcessLookupShipmentsEventHandler,
-					ProcessLookupJTEShipmentsEventHandler
+					ProcessLookupJTEShipmentsEventHandler,
+					ProcessLookupJTEPublicShipmentsHandler
 				],
 				queries: [
 					GetShipmentsHandler

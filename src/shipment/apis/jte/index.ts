@@ -151,6 +151,7 @@ export class JTEApiHelper {
 
       return resultElements?.map((resultItem) => this.processParseResultItem(resultItem))
     } catch (error) {
+      console.error(error);
       throw Error(ERROR_MESSAGES.JTE_PARSE_HTML)
     }
   }

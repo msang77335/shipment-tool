@@ -28,6 +28,8 @@ export class ProcessLookupJTEShipmentsEventHandler implements IEventHandler<Proc
 	public async handle(): Promise<void> {
 		this.loggerExecuteName = `ProcessLookupJTEShipmentsEventHandler`;
 
+		this.logger.info(`${this.loggerExecuteName} eventStatus: ${eventStatus}`);
+
 		try {
 			if (eventStatus === 'LOCKED') return;
 			// CLOCK event
@@ -38,7 +40,7 @@ export class ProcessLookupJTEShipmentsEventHandler implements IEventHandler<Proc
 
 			this.logger.info(`Start ${this.loggerExecuteName}`);
 
-			while(true) {
+			while (true) {
 				await sleep(secondPerLookup * 1000);
 
 				const shipment = await this.shipmentRepository.findOneReadyLookup([
@@ -62,6 +64,8 @@ export class ProcessLookupJTEShipmentsEventHandler implements IEventHandler<Proc
 
 	private async processLookupShipments(cellPhone: string): Promise<any> {
 		const shipments = await this.shipmentRepository.findReadyLookup(LOGISTIC_PROVIDERS["J&T Express"], 9, cellPhone);
+
+		this.logger.info(`${this.loggerExecuteName} with shipments: ${shipments?.map(shipment => shipment.properties().logistics.trackingCode).join(" | ")}`);
 
 		if (shipments?.length === 0) return;
 
