@@ -20,7 +20,7 @@ export class ConfigRepositoryImplement implements ConfigRepository {
 				`${SVC_ENV.get().CONFIG_SERVICE}.getListByKeyTypes`,
 				{ keyType: "SHIPMENT_TRACKING_SYS" },
 			);
-			return result?.data || [];
+			return result?.data ?? [];
 		} catch (error) {
 			console.log(`Calling to ${SVC_ENV.get().CONFIG_SERVICE}.getListSystemConfigs with error: ${JSON.stringify(error)}`);
 		}

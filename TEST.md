@@ -17,5 +17,7 @@ call 'shipment-tracking-connector-service.lookupShipments' {"logisticsInfo":[{"p
 
 call 'shipment-tracking-connector-service.lookupShipments' '{"logisticsInfo":[{"provider":"J&T Express","trackingCode":"SPXVN04622996132B", "cellPhone":"6965"}]}'
 
+call 'shipment-tracking-connector-service.lookupShipments' '{"logisticsInfo":[{"provider":"J&T Express","trackingCode":"851461328721"},{"provider":"J&T Express","trackingCode":"859105193186"},{"provider":"J&T Express","trackingCode":"859106046319"},{"provider":"J&T Express","trackingCode":"859117696868z"}]}'
+
 ### 2. getShipments
 call 'shipment-tracking-connector-service.getShipments' '{"logisticsProvider": "SPX Express"}'

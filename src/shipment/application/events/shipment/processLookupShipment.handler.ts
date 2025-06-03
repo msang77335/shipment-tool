@@ -8,6 +8,7 @@ import { LOGISTIC_PROVIDERS, LOGISTIC_PROVIDERS_MAP, LOGISTIC_PROVIDER_CODES, SY
 import { ConfigRepository, ShipmentRepository } from "../../../domain/repository";
 import { Logistics, Shipment } from "../../../domain/Shipment";
 import { SHIPMENT_TRACKING_CONNECTOR_TYPES } from "../../../SHIPMENT_TRACKING_CONNECTOR_TYPES";
+import { ProcessLookupJTEPublicShipmentsEvent } from "./processLookupJTEPublicShipments.events";
 import { ProcessLookupJTEShipmentsEvent } from "./processLookupJTEShipment.events";
 import { ProcessLookupShipmentsEvent } from "./processLookupShipment.events";
 
@@ -34,6 +35,9 @@ export class ProcessLookupShipmentsEventHandler implements IEventHandler<Process
 		this.loggerExecuteName = `ProcessLookupShipmentsEventHandler`;
 		// Trigger event tra cứu
 		this.eventBus.publish(new ProcessLookupJTEShipmentsEvent());
+		this.eventBus.publish(new ProcessLookupJTEPublicShipmentsEvent());
+
+		this.logger.info(`${this.loggerExecuteName} eventStatus: ${eventStatus}`);
 
 		try {
 			if (eventStatus === 'LOCKED') return;
@@ -44,9 +48,9 @@ export class ProcessLookupShipmentsEventHandler implements IEventHandler<Process
 			const sysConfig = await this.configRepository.getShipmentTrackingConfig();
 			const secondPerLookup = +(sysConfig.find(x => x.key === SYS_KEYS.SECOND_PER_LOOKUP)?.value ?? DEFAULT_SECOND_PER_LOOKUP);
 
-			while(true) {
+			while (true) {
 				await sleep(secondPerLookup * 1000);
-				
+
 				const shipment = await this.shipmentRepository.findOneReadyLookup([
 					LOGISTIC_PROVIDERS.GHN,
 					LOGISTIC_PROVIDERS["GHN - Hàng Cồng Kềnh"],
@@ -62,6 +66,8 @@ export class ProcessLookupShipmentsEventHandler implements IEventHandler<Process
 					eventStatus = 'READY';
 					return
 				}
+
+				this.logger.info(`${this.loggerExecuteName} with shipments: ${shipment?.properties()?.logistics.trackingCode}`);
 
 				this.processLookupShipment(shipment);
 			}

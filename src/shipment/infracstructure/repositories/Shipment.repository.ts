@@ -60,17 +60,19 @@ export class ShipmentRepositoryImplement implements ShipmentRepository {
 		return model ? this.modelToEntity(model) : null;
 	}
 
-	public async findReadyLookup(provider: string,  limit: number, cellPhone?: string): Promise<Shipment[]> {
+	public async findReadyLookup(provider: string, limit: number, cellPhone?: string): Promise<Shipment[]> {
 		const filter: any = {
 			lookupStatus: STATUS.PROCESSING,
 			"logistics.provider": provider
 		}
 		if (cellPhone) {
 			filter["logistics.cellPhone"] = cellPhone;
+		} else {
+			filter["logistics.cellPhone"] = { $exists: false };
 		}
 		const models = await ShipmentModel.find(filter)
 			.sort({ createdAt: 1 })
-			.limit(limit ?? 9) 
+			.limit(limit ?? 9)
 			.lean();
 		return models.map(model => this.modelToEntity(model));
 	}
