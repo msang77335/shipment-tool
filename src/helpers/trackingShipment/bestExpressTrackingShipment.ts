@@ -1,6 +1,6 @@
-import { getNextBrowserlessToken } from '.';
+import { getNextBrowserlessToken } from '..';
 
-export async function bestExpressScreenshouter(codes: string): Promise<{ status: string; buffer: Buffer }> {
+export async function bestExpressTrackingShipment(codes: string): Promise<{ status: string; buffer: Buffer }> {
   console.log(`📍 [BEST EXPRESS] Starting screenshot for tracking: ${codes}`);
 
   const token = getNextBrowserlessToken();

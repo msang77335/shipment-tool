@@ -1,10 +1,10 @@
+import { trackingShipment } from '@/helpers/trackingShipment';
 import { Request, Response, Router } from 'express';
 import { isBestExpress, isGiaoHangNhanh, isJTExpress, isSPX, isUSPS, isViettelPost, isVnPost, isYunExpress } from '../helpers';
-import { aftershipScreenshouter } from '../helpers/aftershipSreenshouter';
-import { screenshoter } from '../helpers/screenshoter';
-import { viettelPostScreenshoter } from '../helpers/viettelPostScreenshoter';
-import { vnPostScreenshoter } from '../helpers/vnPostScreenshoter';
-import { bestExpressScreenshouter } from '../helpers/bestExpressScreenshouter';
+import { aftershipScreenshouter } from '../helpers/trackingShipment/aftershipTrackingShipment';
+import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
+import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
+import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 
 const router = Router();
 
@@ -36,19 +36,19 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     // Handle different providers
     if (isViettelPost(provider)) {
-      result = await viettelPostScreenshoter(codes);
+      result = await viettelPostTrackingShipment(codes);
     } else if (isSPX(provider)) {
-      result = await screenshoter(`https://spx.vn/track?${codes}`, provider);
+      result = await trackingShipment(`https://spx.vn/track?${codes}`, provider);
     } else if (isGiaoHangNhanh(provider)) {
-      result = await screenshoter(`https://donhang.ghn.vn/?order_code=${codes}`, provider);
+      result = await trackingShipment(`https://donhang.ghn.vn/?order_code=${codes}`, provider);
     } else if (isYunExpress(provider)) {
-      result = await screenshoter(`https://www.yuntrack.com/parcelTracking?id=${codes}`, provider);
+      result = await trackingShipment(`https://www.yuntrack.com/parcelTracking?id=${codes}`, provider);
     } else if (isJTExpress(provider) || isUSPS(provider)) {
       result = await aftershipScreenshouter({ codes, provider });
     } else if (isVnPost(provider)) {
-      result = await vnPostScreenshoter(codes);
+      result = await vnPostTrackingShipment(codes);
     } else if(isBestExpress(provider)) {
-      result = await bestExpressScreenshouter(codes);
+      result = await bestExpressTrackingShipment(codes);
     } else {
       console.log(`❌ [TRACKING IMAGE] Unsupported provider: ${provider}`);
       res.status(400).json({

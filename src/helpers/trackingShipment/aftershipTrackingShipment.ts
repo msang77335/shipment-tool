@@ -1,6 +1,6 @@
 import { Page } from 'playwright';
-import { isJTExpress, isUSPS, ScreenshotQuery } from ".";
-import { PlaywrightBrowserSingleton } from "./PlaywrightBrowserSingleton";
+import { isJTExpress, isUSPS, ScreenshotQuery } from "..";
+import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
 
 const getTrackingURL = (codes: string, provider: string) => {
   if (isJTExpress(provider)) {

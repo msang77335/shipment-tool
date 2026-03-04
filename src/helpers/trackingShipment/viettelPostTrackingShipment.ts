@@ -1,10 +1,10 @@
 import { Solver } from '@2captcha/captcha-solver';
 import fs from 'node:fs';
 import path from 'node:path';
-import { env } from '.';
-import { PlaywrightBrowserSingleton } from './PlaywrightBrowserSingleton';
+import { env } from '..';
+import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
 
-export async function viettelPostScreenshoter(code?: string): Promise<{ status: string; buffer: Buffer }> {
+export async function viettelPostTrackingShipment(code?: string): Promise<{ status: string; buffer: Buffer }> {
   const resp = await getTrackingData(code);
   console.log(`📦 [VIETTEL POST] Full API response:`, JSON.stringify(resp, null, 2));
 

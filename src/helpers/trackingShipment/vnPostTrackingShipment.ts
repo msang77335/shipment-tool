@@ -3,8 +3,8 @@ import _ from 'lodash';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Page } from 'playwright';
-import { getNextGeminiApiKey } from '.';
-import { PlaywrightBrowserSingleton } from "./PlaywrightBrowserSingleton";
+import { getNextGeminiApiKey } from '..';
+import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
 
 async function navigateToPage(page: Page, url: string): Promise<void> {
   try {
@@ -180,7 +180,7 @@ async function handleRetryError(page: Page | undefined, attempt: number, maxRetr
   }
 }
 
-export async function vnPostScreenshoter(code?: string): Promise<{ status: string; buffer: Buffer }> {
+export async function vnPostTrackingShipment(code?: string): Promise<{ status: string; buffer: Buffer }> {
   const url = `https://vietnampost.vn/vi`;
   console.log(`📍 [VN POST] Starting screenshot for URL: ${url}`);
   
