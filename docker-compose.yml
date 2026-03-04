@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shipment-tracking-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - API_PREFIX=${API_PREFIX:-/api/v1}
+      - TRUST_PROXY=${TRUST_PROXY:-loopback, linklocal, uniquelocal}
+      # Captcha Services
+      - CAPTCHA_SOLVER_API_KEY=${CAPTCHA_SOLVER_API_KEY:-}
+      # Google AI
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # Browserless
+      - BROWSERLESS_API_TOKEN=${BROWSERLESS_API_TOKEN:-}
+      # Api key for accessing the API
+      - X_API_KEY=${X_API_KEY:-}
