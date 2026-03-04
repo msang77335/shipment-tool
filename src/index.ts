@@ -74,7 +74,6 @@ app.use(errorHandler);
   
   if (env.xApiKey) {
     console.log(`🔐 API Key authentication is ENABLED`);
-    console.log(`🔑 Use header: X-API-Key: ${env.xApiKey}`);
   } else {
     console.log(`⚠️  API Key authentication is DISABLED (no X_API_KEY configured)`);
   }

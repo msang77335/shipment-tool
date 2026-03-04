@@ -1,4 +1,4 @@
-import { trackingShipment } from '@/helpers/trackingShipment';
+import { trackingShipment } from '../helpers/trackingShipment';
 import { Request, Response, Router } from 'express';
 import { isBestExpress, isGiaoHangNhanh, isJTExpress, isSPX, isUSPS, isViettelPost, isVnPost, isYunExpress } from '../helpers';
 import { aftershipScreenshouter } from '../helpers/trackingShipment/aftershipTrackingShipment';
