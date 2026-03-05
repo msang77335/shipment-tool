@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "nodemon src/index.ts",
-    "build": "tsc",
+    "build": "tsc && cp -r templates dist/ && cp -r public dist/",
     "build:watch": "tsc --watch",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
@@ -38,10 +38,8 @@
     "node-fetch": "^3.3.2",
     "playwright": "^1.58.2",
     "playwright-extra": "^4.3.6",
-    "puppeteer": "^24.37.5",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-recaptcha": "^3.6.8",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "puppeteer-extra-plugin-recaptcha": "^3.6.8"
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",
