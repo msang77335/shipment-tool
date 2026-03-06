@@ -191,7 +191,14 @@ async function retryScreenshotCapture({ page, codes, provider, maxRetries }: { p
         console.log(`⏳ [AFTERSHIP] Waiting ${delay}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
-        throw new Error('No tracking data found after all retries');
+        const errorScreenshot = await page.screenshot({ fullPage: false });
+        console.error(`💥 [AFTERSHIP] Final attempt failed, capturing error screenshot...`);
+        return {
+          buffer: Buffer.from(errorScreenshot),
+          status: 'UNKNOWN'
+        }
+        // Here you can save the error screenshot to disk or log it as needed
+        // For example: fs.writeFileSync(`aftership-error-attempt-${attempt}.png`, errorScreenshot);
       }
     } catch (error: any) {
       lastError = error;
