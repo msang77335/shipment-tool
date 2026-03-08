@@ -175,39 +175,61 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
   return null;
 }
 
-async function retryScreenshotCapture({ page, codes, provider, maxRetries }: { page: Page; codes: string; provider: string; maxRetries: number; }): Promise<{ buffer: Buffer; status: string }> {
+async function createPage(browserContext: any): Promise<Page> {
+  const page = await browserContext.newPage();
+  page.setDefaultTimeout(120000);
+  console.log(`⏱️ [AFTERSHIP] Default timeout set to 120 seconds`);
+  return page;
+}
+
+async function closePage(page: Page | undefined): Promise<void> {
+  if (page && !page.isClosed()) {
+    console.log(`🔄 [AFTERSHIP] Closing page...`);
+    await page.close().catch((e: any) => console.log('Error closing page:', e));
+  }
+}
+
+async function waitBeforeRetry(attempt: number): Promise<void> {
+  const delay = attempt * 3000;
+  console.log(`⏳ [AFTERSHIP] Waiting ${delay}ms before retry...`);
+  await new Promise(resolve => setTimeout(resolve, delay));
+}
+
+async function captureLastAttemptScreenshot(page: Page): Promise<{ buffer: Buffer; status: string }> {
+  const errorScreenshot = await page.screenshot({ fullPage: false });
+  console.error(`💥 [AFTERSHIP] Final attempt failed, capturing error screenshot...`);
+  await closePage(page);
+  return { buffer: Buffer.from(errorScreenshot), status: 'UNKNOWN' };
+}
+
+async function retryScreenshotCapture({ browserContext, codes, provider, maxRetries }: { browserContext: any; codes: string; provider: string; maxRetries: number; }): Promise<{ buffer: Buffer; status: string }> {
   let lastError;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let page: Page | undefined;
     try {
+      console.log(`🆕 [AFTERSHIP] Creating new page (attempt ${attempt}/${maxRetries})...`);
+      page = await createPage(browserContext);
+
       const result = await attemptScreenshot({ page, codes, provider, attempt, maxRetries });
 
       if (result) {
+        await closePage(page);
         return result;
       }
 
       if (attempt < maxRetries) {
-        const delay = attempt * 3000;
-        console.log(`⏳ [AFTERSHIP] Waiting ${delay}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await closePage(page);
+        await waitBeforeRetry(attempt);
       } else {
-        const errorScreenshot = await page.screenshot({ fullPage: false });
-        console.error(`💥 [AFTERSHIP] Final attempt failed, capturing error screenshot...`);
-        return {
-          buffer: Buffer.from(errorScreenshot),
-          status: 'UNKNOWN'
-        }
-        // Here you can save the error screenshot to disk or log it as needed
-        // For example: fs.writeFileSync(`aftership-error-attempt-${attempt}.png`, errorScreenshot);
+        return await captureLastAttemptScreenshot(page);
       }
     } catch (error: any) {
       lastError = error;
       console.error(`💥 [AFTERSHIP] Attempt ${attempt}/${maxRetries} failed:`, error.message);
-
+      await closePage(page);
       if (attempt < maxRetries) {
-        const delay = attempt * 3000;
-        console.log(`⏳ [AFTERSHIP] Waiting ${delay}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await waitBeforeRetry(attempt);
       }
     }
   }
@@ -219,7 +241,6 @@ async function retryScreenshotCapture({ page, codes, provider, maxRetries }: { p
 export async function aftershipScreenshouter({ codes, provider }: ScreenshotQuery): Promise<{ status: string; buffer: Buffer }> {
   console.log(`📍 [AFTERSHIP] Starting screenshot for tracking: ${codes}`);
 
-  let page;
   const browserContext = await PlaywrightBrowserSingleton.getContext();
   if (!browserContext) {
     throw new Error('Failed to get browser context');
@@ -228,17 +249,11 @@ export async function aftershipScreenshouter({ codes, provider }: ScreenshotQuer
   const maxRetries = 3;
 
   try {
-    console.log(`🆕 [AFTERSHIP] Creating new page...`);
-    page = await browserContext.newPage();
-    page.setDefaultTimeout(120000); // 120 seconds
-    console.log(`⏱️ [AFTERSHIP] Default timeout set to 120 seconds`);
-
-    const { buffer, status } = await retryScreenshotCapture({ page, codes, provider, maxRetries });
+    const { buffer, status } = await retryScreenshotCapture({ browserContext, codes, provider, maxRetries });
 
     const statusArray = status.split(',');
     const allDelivered = statusArray.every(s => s === 'DELIVERED');
 
-    console.log(`🔒 [AFTERSHIP] Closing page after success...`);
     return {
       buffer,
       status: allDelivered ? 'DELIVERED' : 'UNKNOWN'
@@ -246,10 +261,5 @@ export async function aftershipScreenshouter({ codes, provider }: ScreenshotQuer
   } catch (error) {
     console.error(`💥 [AFTERSHIP] Error in aftershipScreenshouter:`, error);
     throw error;
-  } finally {
-    if (page && !page.isClosed()) {
-      console.log(`🔒 [AFTERSHIP] Closing page in finally block...`);
-      await page.close();
-    }
   }
 }

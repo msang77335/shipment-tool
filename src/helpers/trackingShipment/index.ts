@@ -149,9 +149,13 @@ export async function trackingShipment(url: string, provider: string): Promise<{
         return { status, buffer };
       }
 
-      console.log(`⚠️ [TRACKING SHIPMENT] No tracking data found (attempt ${attempt}/${maxRetries})`);
-      throw new Error(attempt < maxRetries ? 'No tracking data found, will retry' : 'No tracking data found after all retries');
-
+      console.error(`⚠️ [TRACKING SHIPMENT] No tracking data found (attempt ${attempt}/${maxRetries})`);
+      const buffer = await page.screenshot({ fullPage: false });
+      await closePage(page);
+      return {
+        status: 'UNKNOWN',
+        buffer: Buffer.from(buffer)
+      }
     } catch (error: any) {
       lastError = error;
       console.error(`💥 [TRACKING SHIPMENT] Attempt ${attempt}/${maxRetries} failed:`, error.message);

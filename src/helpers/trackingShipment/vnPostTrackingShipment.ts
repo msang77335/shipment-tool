@@ -88,7 +88,6 @@ async function checkTrackingDataPresent(page: Page): Promise<boolean> {
         return false;
       }
     }
-
     return true;
   });
 }
@@ -143,10 +142,14 @@ async function attemptScreenshot(page: Page, url: string, code: string, attempt:
   const hasTrackingData = await checkTrackingDataPresent(page);
 
   if (!hasTrackingData) {
-    const errorMsg = attempt < maxRetries 
-      ? 'No tracking data found, will retry'
-      : 'No tracking data found after all retries';
-    throw new Error(errorMsg);
+    if (attempt < maxRetries) {
+      console.log(`🔄 [VN POST SCREENSHOT] Closing page before retry...`);
+      await page.close().catch(e => console.log('Error closing page:', e));
+      throw new Error('No tracking data found, will retry');
+    }
+    console.log(`⚠️ [VN POST SCREENSHOT] Last attempt: no tracking data found, returning current screenshot with UNKNOWN status...`);
+    const screenshotBuffer = await takeScreenshot(page);
+    return { status: 'UNKNOWN', buffer: screenshotBuffer };
   }
 
   const status = await getTrackingStatus(page);
