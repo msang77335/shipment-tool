@@ -34,7 +34,7 @@ COPY --from=builder /app/dist ./dist
 # =========================
 # Expose port
 # =========================
-EXPOSE 8080
+EXPOSE 9066
 
 # =========================
 # Environment

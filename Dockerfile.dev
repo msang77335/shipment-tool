@@ -34,7 +34,7 @@ RUN npx playwright install firefox
 COPY . .
 
 # Expose port
-EXPOSE 8080
+EXPOSE 9066
 
 # Set environment variables
 ENV NODE_ENV=development
