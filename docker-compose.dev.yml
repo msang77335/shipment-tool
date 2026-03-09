@@ -5,13 +5,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: shipment-tracking-api-dev
+    container_name: shipment-tool-dev
     restart: unless-stopped
     ports:
-      - "${PORT:-8080}:8080"
+      - "${PORT:-9066}:9066"
     environment:
       - NODE_ENV=development
-      - PORT=8080
+      - PORT=9066
       - API_PREFIX=${API_PREFIX:-/api/v1}
       - TRUST_PROXY=${TRUST_PROXY:-loopback, linklocal, uniquelocal}
       # Captcha Services
