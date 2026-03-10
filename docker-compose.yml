@@ -7,6 +7,8 @@ services:
       dockerfile: Dockerfile
     container_name: shipment-tool
     restart: unless-stopped
+    networks:
+      network1:
     ports:
       - "${PORT:-9066}:9066"
     environment:
@@ -22,3 +24,10 @@ services:
       - BROWSERLESS_API_TOKEN=${BROWSERLESS_API_TOKEN:-}
       # Api key for accessing the API
       - X_API_KEY=${X_API_KEY:-}
+
+networks:
+  automation-net:
+    driver: bridge
+  network1:
+    name: dokploy-network
+    external: true
