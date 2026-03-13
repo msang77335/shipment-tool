@@ -1,5 +1,5 @@
 import { Page } from 'playwright';
-import { isJTExpress, isUSPS, ScreenshotQuery } from "..";
+import { captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isJTExpress, isUSPS, ScreenshotQuery, waitBeforeRetry } from "..";
 import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
 
 const getTrackingURL = (codes: string, provider: string) => {
@@ -149,14 +149,6 @@ async function getAllShipments(page: Page): Promise<{ status: string }> {
   return { status };
 }
 
-async function captureScreenshot(page: Page): Promise<Buffer> {
-  console.log(`✅ [AFTERSHIP] Tracking data found, taking screenshot...`);
-  const screenshot = await page.screenshot({ fullPage: false });
-  console.log(`✅ [AFTERSHIP] Screenshot captured, size: ${screenshot.length} bytes`);
-  console.log(`✨ [AFTERSHIP] All done!`);
-  return Buffer.from(screenshot);
-}
-
 async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }: { page: Page; codes: string; provider: string; attempt: number; maxRetries: number; }): Promise<{ buffer: Buffer; status: string } | null> {
   const trackingURL = getTrackingURL(codes, provider);
   await navigateAndSolveRecaptcha(page, trackingURL, attempt, maxRetries);
@@ -173,33 +165,6 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
   }
 
   return null;
-}
-
-async function createPage(browserContext: any): Promise<Page> {
-  const page = await browserContext.newPage();
-  page.setDefaultTimeout(120000);
-  console.log(`⏱️ [AFTERSHIP] Default timeout set to 120 seconds`);
-  return page;
-}
-
-async function closePage(page: Page | undefined): Promise<void> {
-  if (page && !page.isClosed()) {
-    console.log(`🔄 [AFTERSHIP] Closing page...`);
-    await page.close().catch((e: any) => console.log('Error closing page:', e));
-  }
-}
-
-async function waitBeforeRetry(attempt: number): Promise<void> {
-  const delay = attempt * 3000;
-  console.log(`⏳ [AFTERSHIP] Waiting ${delay}ms before retry...`);
-  await new Promise(resolve => setTimeout(resolve, delay));
-}
-
-async function captureLastAttemptScreenshot(page: Page): Promise<{ buffer: Buffer; status: string }> {
-  const errorScreenshot = await page.screenshot({ fullPage: false });
-  console.error(`💥 [AFTERSHIP] Final attempt failed, capturing error screenshot...`);
-  await closePage(page);
-  return { buffer: Buffer.from(errorScreenshot), status: 'UNKNOWN' };
 }
 
 async function retryScreenshotCapture({ browserContext, codes, provider, maxRetries }: { browserContext: any; codes: string; provider: string; maxRetries: number; }): Promise<{ buffer: Buffer; status: string }> {
@@ -238,7 +203,7 @@ async function retryScreenshotCapture({ browserContext, codes, provider, maxRetr
   throw lastError || new Error('Failed to capture screenshot after all retries');
 }
 
-export async function aftershipScreenshouter({ codes, provider }: ScreenshotQuery): Promise<{ status: string; buffer: Buffer }> {
+export async function aftershipTrackingShipment({ codes, provider }: ScreenshotQuery): Promise<{ status: string; buffer: Buffer }> {
   console.log(`📍 [AFTERSHIP] Starting screenshot for tracking: ${codes}`);
 
   const browserContext = await PlaywrightBrowserSingleton.getContext();

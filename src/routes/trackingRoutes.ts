@@ -1,10 +1,11 @@
 import { trackingShipment } from '../helpers/trackingShipment';
 import { Request, Response, Router } from 'express';
-import { isBestExpress, isGiaoHangNhanh, isJTExpress, isSPX, isUSPS, isViettelPost, isVnPost, isYunExpress } from '../helpers';
-import { aftershipScreenshouter } from '../helpers/trackingShipment/aftershipTrackingShipment';
+import { isBestExpress, isGiaoHangNhanh, isJTExpress, isSPX, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { aftershipTrackingShipment } from '../helpers/trackingShipment/aftershipTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
+import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
 
 const router = Router();
 
@@ -43,8 +44,10 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       result = await trackingShipment(`https://donhang.ghn.vn/?order_code=${codes}`, provider);
     } else if (isYunExpress(provider)) {
       result = await trackingShipment(`https://www.yuntrack.com/parcelTracking?id=${codes}`, provider);
+    } else if (isYW(provider)) {
+      result = await ywTrackingShipment({ codes });
     } else if (isJTExpress(provider) || isUSPS(provider)) {
-      result = await aftershipScreenshouter({ codes, provider });
+      result = await aftershipTrackingShipment({ codes, provider });
     } else if (isVnPost(provider)) {
       result = await vnPostTrackingShipment(codes);
     } else if(isBestExpress(provider)) {

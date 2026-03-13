@@ -58,6 +58,9 @@ export class PlaywrightBrowserSingleton {
     } else {
       console.log(`🆕 [BROWSER CONTEXT] Creating context ${nextIndex + 1} on demand...`);
       const context = await browser.newContext({ viewport: { width: 1280, height: 1080 } });
+      await context.route(/google-analytics\.com|analytics\.google\.com/, route => {
+        route.abort();
+      });
       context.on('close', () => {
         console.log(`🔌 [BROWSER CONTEXT] Browser context ${nextIndex + 1} closed`);
         this.browserContexts[nextIndex] = undefined as any;

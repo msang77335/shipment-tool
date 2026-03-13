@@ -221,7 +221,7 @@ async function renderScreenshot(data: any): Promise<Buffer> {
     page = await browserContext.newPage();
     await page.setContent(html, { waitUntil: 'networkidle' });
 
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     // Take screenshot
     const screenshot = await page.screenshot({
