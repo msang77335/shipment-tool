@@ -7,7 +7,7 @@ export class PlaywrightBrowserSingleton {
   private static browserInstance: Browser | null = null;
   private static browserContexts: BrowserContext[] = [];
   private static contextIndex: number = 0;
-  private static readonly MAX_CONTEXTS = 1;
+  private static readonly MAX_CONTEXTS = 3;
   
   static async getInstance(): Promise<Browser | null> {
     if (this.browserInstance) {
