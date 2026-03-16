@@ -4,7 +4,7 @@ A robust REST API for tracking shipments across multiple carriers using automate
 
 ## 🌟 Features
 
-- 📦 **Multi-Carrier Support** - Track shipments from 9+ shipping providers
+- 📦 **Multi-Carrier Support** - Track shipments from 10+ shipping providers
 - 📸 **Screenshot-Based Tracking** - Visual proof of tracking status
 - 🤖 **Browser Automation** - Playwright for reliable page rendering
 - 🔐 **Security Hardened** - Helmet, CORS, and rate limiting enabled
@@ -19,7 +19,6 @@ A robust REST API for tracking shipments across multiple carriers using automate
 
 | Provider | Region | Notes |
 |----------|--------|-------|
-| **Aftership** | Global | Aggregator platform |
 | **Best Express** | Vietnam | Local logistics |
 | **GHN** (Giao Hang Nhanh) | Vietnam | Express delivery |
 | **JT Express** | Asia-Pacific | International shipping |
@@ -28,6 +27,8 @@ A robust REST API for tracking shipments across multiple carriers using automate
 | **Viettel Post** | Vietnam | Postal & logistics |
 | **VN Post** | Vietnam | National postal service |
 | **YunExpress** | China | International logistics |
+| **OnTrac** | United States | Regional carrier |
+| **YW (yw56.com)** | China | International logistics |
 
 ## 🚀 Getting Started
 
@@ -200,14 +201,15 @@ Get tracking information as a screenshot image with metadata.
 | `codes` | string | Yes | Tracking number(s) - comma-separated for multiple |
 
 #### Provider Codes
-- `aftership` - Aftership
 - `bestexpress` - Best Express
 - `ghn` - Giao Hang Nhanh
 - `jtexpress` - JT Express
+- `ontrac` - OnTrac
 - `spx` - Shopee Express
 - `usps` - USPS
 - `viettelpost` - Viettel Post
 - `vnpost` - VN Post
+- `yw` - YW (yw56.com)
 - `yunexpress` - YunExpress
 
 #### Response

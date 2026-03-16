@@ -1,4 +1,4 @@
-import { isGiaoHangNhanh, isSPX, isYunExpress } from "../";
+import { isGiaoHangNhanh, isOnTrac, isSPX, isYunExpress } from "../";
 import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
 
 async function navigateToPage(page: any, url: string): Promise<void> {
@@ -28,8 +28,13 @@ async function checkTrackingData(page: any): Promise<boolean> {
     const yunTableHeader = (globalThis as any).document.querySelector('.el-table__header-wrapper');
     const yunNoData = (globalThis as any).document.body?.textContent?.includes('No data');
     const yunHasData = yunTableHeader && !yunNoData;
-    
-    return spxHasData || ghnHasData || yunHasData;
+
+    // Check OnTrac: has data when events list has rows and no error message visible
+    const ontracErrorMsg = (globalThis as any).document.querySelector('#js-track-error-message');
+    const ontracErrorVisible = ontracErrorMsg?.style?.display === 'block';
+    const ontracHasData = !(ontracErrorVisible && ontracErrorMsg?.textContent?.includes('No tracking information for'));
+
+    return spxHasData || ghnHasData || yunHasData || ontracHasData;
   });
 }
 
@@ -87,6 +92,31 @@ async function getTrackingStatus(page: any, provider: string): Promise<string> {
       }
       
       // All other cases
+      return 'UNKNOWN';
+    });
+  } else if (isOnTrac(provider)) {
+    console.log(`📊 [TRACKING SHIPMENT] Getting tracking status for OnTrac...`);
+    return await page.evaluate(() => {
+      const doc = (globalThis as any).document;
+
+      // Check main status heading
+      const eventFormatted = doc.querySelector('h2[name="EventFormatted"], .section-title[name="EventFormatted"]');
+      const eventFormattedText = eventFormatted?.textContent?.trim() || '';
+
+      // Check short description (e.g. "Package Delivered")
+      const shortDesc = doc.querySelector('p[name="EventShortDescriptionFormatted"]');
+      const shortDescText = shortDesc?.textContent?.trim() || '';
+
+      // Check first event row in table
+      const firstEventCell = doc.querySelector('#js-track-events-list tr td:nth-child(2)');
+      const firstEventText = firstEventCell?.textContent?.trim() || '';
+
+      const allText = `${eventFormattedText} ${shortDescText} ${firstEventText}`.toLowerCase();
+
+      if (allText.includes('delivered')) {
+        return 'DELIVERED';
+      }
+
       return 'UNKNOWN';
     });
   }

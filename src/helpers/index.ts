@@ -64,6 +64,11 @@ export function isYW(providerStr: string) {
   return upperStr.includes('YW');
 }
 
+export function isOnTrac(providerStr: string) {
+  const upperStr = providerStr.toUpperCase();
+  return upperStr.includes('ONTRAC');
+}
+
 export async function createPage(browserContext: any): Promise<Page> {
   const page = await browserContext.newPage();
   page.setDefaultTimeout(120000);
