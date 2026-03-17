@@ -1,6 +1,7 @@
-import { trackingShipment } from '../helpers/trackingShipment';
+import { uniTrackingShipment } from '../helpers/trackingShipment/uniTrackingShipment';
 import { Request, Response, Router } from 'express';
-import { isBestExpress, isGiaoHangNhanh, isJTExpress, isOnTrac, isSPX, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { isBestExpress, isGiaoHangNhanh, isJTExpress, isOnTrac, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { trackingShipment } from '../helpers/trackingShipment';
 import { aftershipTrackingShipment } from '../helpers/trackingShipment/aftershipTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
@@ -52,8 +53,10 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       result = await aftershipTrackingShipment({ codes, provider });
     } else if (isVnPost(provider)) {
       result = await vnPostTrackingShipment(codes);
-    } else if(isBestExpress(provider)) {
+    } else if (isBestExpress(provider)) {
       result = await bestExpressTrackingShipment(codes);
+    } else if (isUNIUNI(provider)) {
+      result = await uniTrackingShipment({ codes });
     } else {
       console.log(`❌ [TRACKING IMAGE] Unsupported provider: ${provider}`);
       res.status(400).json({

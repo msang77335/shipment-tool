@@ -69,6 +69,11 @@ export function isOnTrac(providerStr: string) {
   return upperStr.includes('ONTRAC');
 }
 
+export function isUNIUNI(providerStr: string) {
+  const upperStr = providerStr.toUpperCase();
+  return upperStr.includes('UNIUNI');
+}
+
 export async function createPage(browserContext: any): Promise<Page> {
   const page = await browserContext.newPage();
   page.setDefaultTimeout(120000);
