@@ -16,8 +16,16 @@ async function navigateAndTracking(page: Page, trackingURL: string, codes: strin
   console.log(`⌨️ [UNIUNI] Clicking Track button...`);
   await page.click('.track-btn');
 
-  console.log(`⏳ [UNIUNI] Waiting 15 seconds for content to load...`);
-  await new Promise(resolve => setTimeout(resolve, 15000));
+  console.log(`⏳ [UNIUNI] Waiting 10 seconds for content to load...`);
+  await new Promise(resolve => setTimeout(resolve, 10000));
+
+  console.log(`🖱️ [UNIUNI] Clicking overview div to open detail...`);
+  await page.click('.overview');
+
+  console.log(`⏳ [UNIUNI] Waiting for detail to be visible...`);
+  await page.waitForSelector('.detail-list', { state: 'visible', timeout: 10000 });
+
+  await new Promise(resolve => setTimeout(resolve, 5000));
 }
 
 async function getShipmentStatus(page: Page): Promise<string> {
