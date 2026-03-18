@@ -9,11 +9,11 @@ export interface ScreenshotQuery {
 export { env, getEnv, getEnvVar, hasEnvVar, requireEnvVar, type EnvConfig } from './env';
 
 // Browserless Token Rotator
-export { 
-  browserlessTokenRotator, 
-  getNextBrowserlessToken, 
-  hasBrowserlessTokens, 
-  getBrowserlessTokenCount 
+export {
+  browserlessTokenRotator,
+  getNextBrowserlessToken,
+  hasBrowserlessTokens,
+  getBrowserlessTokenCount
 } from './browserlessTokenRotator';
 
 // Gemini API Key Rotator
@@ -29,7 +29,9 @@ export function isUSPS(providerStr: string) {
 }
 
 export function isSPX(providerStr: string) {
-  return providerStr.toUpperCase().includes('SPX') || providerStr.toUpperCase().includes('SPX INTERNATIONAL');
+  return providerStr.toUpperCase().includes('SPX') ||
+    providerStr.toUpperCase().includes('SPX INTERNATIONAL') ||
+    providerStr.toUpperCase().includes('ĐIỂM NHẬN HÀNG');
 }
 
 export function isGiaoHangNhanh(providerStr: string) {
