@@ -7,6 +7,7 @@ import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExp
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
+import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingShipment';
 
 const router = Router();
 
@@ -49,7 +50,11 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       result = await trackingShipment(`https://www.ontrac.com/tracking/?number=${codes}`, provider);
     } else if (isYW(provider)) {
       result = await ywTrackingShipment({ codes });
-    } else if (isJTExpress(provider) || isUSPS(provider)) {
+    } else if (isJTExpress(provider)) {
+      result = await aftershipTrackingShipment({ codes, provider });
+    } else if (isUSPS(provider) && codes.split(',').length === 1) {
+      result = await uspsTrackingShipment({ codes });
+    } else if (isUSPS(provider) && codes.split(',').length > 1) {
       result = await aftershipTrackingShipment({ codes, provider });
     } else if (isVnPost(provider)) {
       result = await vnPostTrackingShipment(codes);
