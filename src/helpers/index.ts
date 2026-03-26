@@ -76,6 +76,11 @@ export function isUNIUNI(providerStr: string) {
   return upperStr.includes('UNIUNI');
 }
 
+export function isEVRI(providerStr: string) {
+  const upperStr = providerStr.toUpperCase();
+  return upperStr.includes('EVRI');
+}
+
 export async function createPage(browserContext: any): Promise<Page> {
   const page = await browserContext.newPage();
   page.setDefaultTimeout(120000);
