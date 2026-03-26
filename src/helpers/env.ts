@@ -6,6 +6,12 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+export interface ProxyConfig {
+  server: string;
+  username?: string;
+  password?: string;
+}
+
 export interface EnvConfig {
   // Environment
   nodeEnv: string;
@@ -29,6 +35,40 @@ export interface EnvConfig {
   
   // Browser Services
   browserlessApiToken?: string;
+
+  // Proxy Services
+  proxies: ProxyConfig[];
+
+  // Shopee session cookies (JSON array of Playwright Cookie objects)
+  shopeeCookies?: string;
+
+  // Shopee login credentials
+  shopeeUsername?: string;
+  shopeePassword?: string;
+
+  // Shopee device fingerprint cookie
+  shopeeSpcF?: string;
+}
+
+/**
+ * Parse proxy list from environment variable
+ * Format: "ip:port:username:password|ip:port:username:password|..."
+ * Example: "31.59.20.176:6754:jdlxhaek:rmkr551esb7x|23.95.150.145:6114:jdlxhaek:rmkr551esb7x"
+ */
+function parseProxies(): ProxyConfig[] {
+  const proxyEnv = process.env.PROXY_LIST || '';
+  if (!proxyEnv.trim()) {
+    return [];
+  }
+  
+  return proxyEnv.split('|').map(proxy => {
+    const [ip, port, username, password] = proxy.split(':');
+    return {
+      server: `http://${ip}:${port}`,
+      username: username || undefined,
+      password: password || undefined,
+    };
+  }).filter(p => p.server);
 }
 
 /**
@@ -58,6 +98,19 @@ export function getEnv(): EnvConfig {
 
     // API Key for accessing the API
     xApiKey: process.env.X_API_KEY || undefined,
+
+    // Proxy Services
+    proxies: parseProxies(),
+
+    // Shopee session cookies
+    shopeeCookies: process.env.SHOPEE_SESSION_COOKIES || undefined,
+
+    // Shopee login credentials
+    shopeeUsername: process.env.SHOPEE_USERNAME || undefined,
+    shopeePassword: process.env.SHOPEE_PASSWORD || undefined,
+
+    // Shopee device fingerprint cookie
+    shopeeSpcF: process.env.SHOPEE_SPC_F || undefined,
   };
 }
 

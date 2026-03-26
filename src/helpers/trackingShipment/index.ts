@@ -139,7 +139,7 @@ async function closePage(page: any): Promise<void> {
 
 export async function trackingShipment(url: string, provider: string): Promise<{ status: string; buffer: Buffer }> {
   console.log(`📍 [TRACKING SHIPMENT] Starting screenshot for URL: ${url}`);
-  const browserContext = await PlaywrightBrowserSingleton.getContext();
+  const browserContext = await PlaywrightBrowserSingleton.getContextWithoutProxy();
   if (!browserContext) {
     throw new Error('Failed to get browser context');
   }

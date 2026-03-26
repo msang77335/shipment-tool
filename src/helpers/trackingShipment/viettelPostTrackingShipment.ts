@@ -213,7 +213,7 @@ async function renderScreenshot(data: any): Promise<Buffer> {
     html = html.replace('{{NGAY_GIAO_DU_KIEN}}', ngayGiaoDuKien);
     html = html.replace('{{TIMELINE_ITEMS}}', timelineHtml);
 
-    const browserContext = await PlaywrightBrowserSingleton.getContext();
+    const browserContext = await PlaywrightBrowserSingleton.getContextWithoutProxy();
     if (!browserContext) {
       throw new Error('Failed to get browser context');
     }

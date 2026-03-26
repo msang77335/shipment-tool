@@ -6,7 +6,7 @@ export interface ScreenshotQuery {
 }
 
 // Environment Configuration
-export { env, getEnv, getEnvVar, hasEnvVar, requireEnvVar, type EnvConfig } from './env';
+export { env, getEnv, getEnvVar, hasEnvVar, requireEnvVar, type EnvConfig, type ProxyConfig } from './env';
 
 // Browserless Token Rotator
 export {

@@ -106,7 +106,7 @@ async function retryScreenshotCapture({ browserContext, codes, maxRetries }: { b
 export async function uniTrackingShipment({ codes }: { codes: string }): Promise<{ status: string; buffer: Buffer }> {
   console.log(`📍 [UNIUNI] Starting screenshot for tracking: ${codes}`);
 
-  const browserContext = await PlaywrightBrowserSingleton.getContext();
+  const browserContext = await PlaywrightBrowserSingleton.getContextWithoutProxy();
   if (!browserContext) {
     throw new Error('Failed to get browser context');
   }

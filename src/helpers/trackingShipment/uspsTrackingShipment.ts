@@ -205,7 +205,7 @@ async function attemptUSPS(page: Page, codes: string, attempt: number, maxRetrie
 }
 
 async function runAttempt(codes: string, attempt: number, maxRetries: number): Promise<{ buffer: Buffer; status: string } | null> {
-  const context = await PlaywrightBrowserSingleton.getContext();
+  const context = await PlaywrightBrowserSingleton.getContextWithoutProxy();
   if (!context) throw new Error('Failed to get Playwright context');
 
   const page = await context.newPage();
