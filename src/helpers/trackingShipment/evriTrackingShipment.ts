@@ -203,7 +203,7 @@ async function attemptEvri(codes: string, attempt: number, maxRetries: number): 
 
     // Take screenshot
     console.log(`📸 [EVRI] Taking screenshot...`);
-    const screenshot = await page.screenshot({ fullPage: true });
+    const screenshot = await page.screenshot({ fullPage: false });
     console.log(`✅ [EVRI] Screenshot captured, size: ${screenshot.length} bytes`);
 
     return {
