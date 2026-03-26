@@ -182,6 +182,19 @@ async function attemptUSPS(page: Page, codes: string, attempt: number, maxRetrie
 
   await new Promise(r => setTimeout(r, 2000));
 
+  // Remove navigation menu elements before screenshot
+  await page.evaluate(() => {
+    const doc = (globalThis as any).document;
+    const menuElements = doc.querySelectorAll('ul[role="menu"]');
+    menuElements.forEach((el: any) => {
+      if (el.parentElement) {
+        el.remove();
+      }
+    });
+  });
+
+  await new Promise(r => setTimeout(r, 3000));
+
   const status = await getShipmentStatus(page);
   console.log(`📊 [USPS] Status: ${status}`);
 
