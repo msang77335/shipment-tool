@@ -57,11 +57,13 @@ export interface EnvConfig {
  */
 function parseProxies(): ProxyConfig[] {
   const proxyEnv = process.env.PROXY_LIST || '';
+  
   if (!proxyEnv.trim()) {
+    console.log('🔄 [PROXY] No proxies configured (PROXY_LIST is empty)');
     return [];
   }
   
-  return proxyEnv.split('|').map(proxy => {
+  const proxies = proxyEnv.split('|').map(proxy => {
     const [ip, port, username, password] = proxy.split(':');
     return {
       server: `http://${ip}:${port}`,
@@ -69,6 +71,14 @@ function parseProxies(): ProxyConfig[] {
       password: password || undefined,
     };
   }).filter(p => p.server);
+  
+  console.log(`🔄 [PROXY] Loaded ${proxies.length} proxy(ies)`);
+  proxies.forEach((proxy, index) => {
+    const auth = proxy.username ? ` (${proxy.username})` : '';
+    console.log(`   [${index + 1}] ${proxy.server}${auth}`);
+  });
+  
+  return proxies;
 }
 
 /**
