@@ -4,12 +4,15 @@ import { env } from '.';
 const { firefox } = require('playwright-extra')
 
 export class PlaywrightBrowserSingleton {
-  private static browserInstance: Browser | null = null;
-  private static browserContexts: BrowserContext[] = [];
-  private static contextIndex: number = 0;
-  private static proxyIndex: number = 0;
-  private static readonly MAX_CONTEXTS = 3;
+  // Browser pool: one browser instance per proxy
+  private static browserPool: Map<string, Browser> = new Map(); // key: proxy server URL
+  private static contextPools: Map<string, (BrowserContext | undefined)[]> = new Map(); // key: proxy server URL
+  private static contextIndices: Map<string, number> = new Map(); // key: proxy server URL
+  
+  private static proxyIndex: number = 0; // for round-robin proxy selection
   private static currentProxyServer: string = ''; // Track which proxy is being used
+  
+  private static readonly MAX_CONTEXTS_PER_BROWSER = 3;
   
   // Non-proxy browser instance and contexts
   private static nonProxyBrowserInstance: Browser | null = null;
@@ -19,8 +22,9 @@ export class PlaywrightBrowserSingleton {
   
   /**
    * Get next proxy in rotation (requires proxies to be configured)
+   * Returns the proxy config along with its index
    */
-  private static getNextProxy() {
+  private static getNextProxyWithIndex() {
     const proxy = env.proxies[this.proxyIndex % env.proxies.length];
     const proxyCount = env.proxies.length;
     const currentIndex = this.proxyIndex % proxyCount;
@@ -33,13 +37,19 @@ export class PlaywrightBrowserSingleton {
     // Store the current proxy server for logging
     this.currentProxyServer = proxy.server;
     
-    return proxy;
+    return { proxy, index: currentIndex, total: proxyCount };
   }
   
-  static async getInstance(): Promise<Browser | null> {
-    if (this.browserInstance) {
-      console.log(`♻️ [BROWSER] Reusing existing browser instance (WITH PROXY: ${this.currentProxyServer})`);
-      return this.browserInstance;
+  /**
+   * Get or create browser instance for a specific proxy
+   */
+  private static async getOrCreateBrowserForProxy(proxy: any): Promise<Browser | null> {
+    const proxyKey = proxy.server;
+    
+    // Return existing browser instance if available
+    if (this.browserPool.has(proxyKey)) {
+      console.log(`♻️ [BROWSER] Reusing existing browser instance (WITH PROXY: ${proxyKey})`);
+      return this.browserPool.get(proxyKey)!;
     }
     
     // Ensure proxies are configured
@@ -59,60 +69,81 @@ export class PlaywrightBrowserSingleton {
         visualFeedback: true,
       })
     );
-    console.log('🆕 [BROWSER] Creating new browser instance WITH proxy');
+    console.log(`🆕 [BROWSER] Creating new browser instance WITH proxy ${proxyKey}`);
     
     const launchOptions: any = {
       headless: false,
       args: [
         '--no-sandbox',
-      ]
+      ],
+      proxy: proxy
     };
     
-    // Add proxy (guaranteed to exist due to check above)
-    const proxy = this.getNextProxy();
-    launchOptions.proxy = proxy;
+    const browserInstance = await firefox.launch(launchOptions);
+    console.log(`✅ [BROWSER] Browser instance created with proxy ${proxyKey}`);
     
-    this.browserInstance = await firefox.launch(launchOptions);
-    console.log(`✅ [BROWSER] Browser instance created with proxy ${this.currentProxyServer}`);
-    
-    if (this.browserInstance) {
-      this.browserInstance.on('disconnected', () => {
-        console.log('🔌 [BROWSER] Browser disconnected');
-        this.browserInstance = null;
-        this.browserContexts = [];
-        this.contextIndex = 0;
-        this.currentProxyServer = '';
+    if (browserInstance) {
+      browserInstance.on('disconnected', () => {
+        console.log(`🔌 [BROWSER] Browser disconnected (proxy: ${proxyKey})`);
+        this.browserPool.delete(proxyKey);
+        this.contextPools.delete(proxyKey);
+        this.contextIndices.delete(proxyKey);
       });
     }
-    return this.browserInstance;
+    
+    // Initialize context pool for this proxy
+    if (!this.contextPools.has(proxyKey)) {
+      this.contextPools.set(proxyKey, []);
+      this.contextIndices.set(proxyKey, 0);
+    }
+    
+    this.browserPool.set(proxyKey, browserInstance!);
+    return browserInstance;
   }
 
   static async getContext(): Promise<BrowserContext | null> {
-    const browser = await this.getInstance();
+    // Get next proxy with rotation
+    const { proxy, index, total } = this.getNextProxyWithIndex();
+    
+    // Get or create browser for this proxy
+    const browser = await this.getOrCreateBrowserForProxy(proxy);
     if (!browser) {
       console.error('❌ [BROWSER CONTEXT] Cannot create context, browser instance is null');
       return null;
     }
 
-    // Get next context index (round-robin)
-    const nextIndex = this.contextIndex % this.MAX_CONTEXTS;
+    const proxyKey = proxy.server;
+    
+    // Get context pool and index for this proxy
+    let contextPool = this.contextPools.get(proxyKey);
+    let contextIndex = this.contextIndices.get(proxyKey) || 0;
+    
+    if (!contextPool) {
+      contextPool = [];
+      this.contextPools.set(proxyKey, contextPool);
+    }
+    
+    // Get next context index (round-robin within 3 contexts max)
+    const nextIndex = contextIndex % this.MAX_CONTEXTS_PER_BROWSER;
     
     // Create context lazily only when needed
-    if (this.browserContexts[nextIndex]) {
-      console.log(`♻️ [BROWSER CONTEXT] Reusing context ${nextIndex + 1}/${this.MAX_CONTEXTS} (WITH PROXY: ${this.currentProxyServer})`);
+    if (contextPool[nextIndex]) {
+      console.log(`♻️ [BROWSER CONTEXT] Reusing context ${nextIndex + 1}/${this.MAX_CONTEXTS_PER_BROWSER} (WITH PROXY [${index + 1}/${total}]: ${proxyKey})`);
     } else {
-      console.log(`🆕 [BROWSER CONTEXT] Creating context ${nextIndex + 1} with proxy ${this.currentProxyServer} on demand...`);
+      console.log(`🆕 [BROWSER CONTEXT] Creating context ${nextIndex + 1} with proxy [${index + 1}/${total}] ${proxyKey} on demand...`);
       const context = await browser.newContext({ viewport: { width: 1280, height: 1080 } });
       context.on('close', () => {
-        console.log(`🔌 [BROWSER CONTEXT] Browser context ${nextIndex + 1} closed`);
-        this.browserContexts[nextIndex] = undefined as any;
+        console.log(`🔌 [BROWSER CONTEXT] Browser context ${nextIndex + 1} closed (proxy: ${proxyKey})`);
+        contextPool![nextIndex] = undefined;
       });
-      this.browserContexts[nextIndex] = context;
-      console.log(`✅ [BROWSER CONTEXT] Context ${nextIndex + 1} created with proxy ${this.currentProxyServer}`);
+      contextPool[nextIndex] = context;
+      console.log(`✅ [BROWSER CONTEXT] Context ${nextIndex + 1} created with proxy [${index + 1}/${total}] ${proxyKey}`);
     }
 
-    const context = this.browserContexts[nextIndex];
-    this.contextIndex = (this.contextIndex + 1) % this.MAX_CONTEXTS;
+    const context = contextPool[nextIndex];
+    
+    // Update context index for next call
+    this.contextIndices.set(proxyKey, contextIndex + 1);
     
     return context;
   }
