@@ -1,6 +1,6 @@
 import { uniTrackingShipment } from '../helpers/trackingShipment/uniTrackingShipment';
 import { Request, Response, Router } from 'express';
-import { isBestExpress, isGiaoHangNhanh, isJTExpress, isOnTrac, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { isBestExpress, isEVRI, isGiaoHangNhanh, isJTExpress, isOnTrac, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
 import { aftershipTrackingShipment } from '../helpers/trackingShipment/aftershipTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
@@ -8,6 +8,7 @@ import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettel
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
 import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingShipment';
+import { evriTrackingShipment } from '../helpers/trackingShipment/evriTrackingShipment';
 
 const router = Router();
 
@@ -62,6 +63,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       result = await bestExpressTrackingShipment(codes);
     } else if (isUNIUNI(provider)) {
       result = await uniTrackingShipment({ codes });
+    } else if (isEVRI(provider)) {
+      result = await evriTrackingShipment({ codes });
     } else {
       console.log(`❌ [TRACKING IMAGE] Unsupported provider: ${provider}`);
       res.status(400).json({
