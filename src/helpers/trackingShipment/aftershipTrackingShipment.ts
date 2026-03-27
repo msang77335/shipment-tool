@@ -18,18 +18,18 @@ async function navigateAndSolveRecaptcha(page: Page, trackingURL: string, attemp
   });
   console.log(`✅ [AFTERSHIP] Page loaded successfully`);
 
-  console.log(`🔍 [AFTERSHIP] Attempting to solve reCAPTCHAs...`);
-  const result = await page.solveRecaptchas();
-  console.log(`✅ [AFTERSHIP] reCAPTCHA result:`, {
-    captchasFound: result.captchas?.length || 0,
-    solutionsCount: result.solutions?.length || 0,
-    solvedCount: result.solved?.length || 0,
-    hasError: !!result.error
-  });
+  // console.log(`🔍 [AFTERSHIP] Attempting to solve reCAPTCHAs...`);
+  // const result = await page.solveRecaptchas();
+  // console.log(`✅ [AFTERSHIP] reCAPTCHA result:`, {
+  //   captchasFound: result.captchas?.length || 0,
+  //   solutionsCount: result.solutions?.length || 0,
+  //   solvedCount: result.solved?.length || 0,
+  //   hasError: !!result.error
+  // });
 
-  if (result.error) {
-    console.log(`⚠️ [AFTERSHIP] reCAPTCHA solving error:`, result.error);
-  }
+  // if (result.error) {
+  //   console.log(`⚠️ [AFTERSHIP] reCAPTCHA solving error:`, result.error);
+  // }
 
   console.log(`⏳ [AFTERSHIP] Waiting 15 seconds for content to load...`);
   await new Promise(resolve => setTimeout(resolve, 15000));
@@ -90,13 +90,16 @@ async function checkForQuotaOrBlockingIssues(page: Page): Promise<boolean> {
     // Check for various blocking/quota messages
     const blockingPatterns = [
       /Quota\s+Exceeded/i,
+      /You've\s+reached\s+your\s+track\s+limit/i,
+      /reached\s+your\s+track\s+limit/i,
       /track\s+limit/i,
       /rate\s+limit/i,
       /Too\s+many\s+requests/i,
       /Please\s+try\s+again\s+later/i,
       /currently\s+unavailable/i,
       /access\s+denied/i,
-      /temporarily\s+blocked/i
+      /temporarily\s+blocked/i,
+      /Download\s+the\s+mobile\s+app/i
     ];
 
     return blockingPatterns.some(pattern => 

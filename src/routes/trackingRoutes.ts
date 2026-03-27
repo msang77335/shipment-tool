@@ -1,6 +1,6 @@
 import { uniTrackingShipment } from '../helpers/trackingShipment/uniTrackingShipment';
 import { Request, Response, Router } from 'express';
-import { isBestExpress, isEVRI, isGiaoHangNhanh, isJTExpress, isOnTrac, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { isASENDIA, isBestExpress, isEVRI, isGiaoHangNhanh, isJTExpress, isOnTrac, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
 import { aftershipTrackingShipment } from '../helpers/trackingShipment/aftershipTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
@@ -65,6 +65,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       result = await uniTrackingShipment({ codes });
     } else if (isEVRI(provider)) {
       result = await evriTrackingShipment({ codes });
+    } else if (isASENDIA(provider)) {
+      result = await trackingShipment(`https://track.asendia.com/track/${codes}`, provider);
     } else {
       console.log(`❌ [TRACKING IMAGE] Unsupported provider: ${provider}`);
       res.status(400).json({

@@ -81,6 +81,11 @@ export function isEVRI(providerStr: string) {
   return upperStr.includes('EVRI');
 }
 
+export function isASENDIA(providerStr: string) {
+  const upperStr = providerStr.toUpperCase();
+  return upperStr.includes('ASENDIA');
+}
+
 export async function createPage(browserContext: any): Promise<Page> {
   const page = await browserContext.newPage();
   page.setDefaultTimeout(120000);

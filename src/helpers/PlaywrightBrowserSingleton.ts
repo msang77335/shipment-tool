@@ -299,29 +299,43 @@ export class PlaywrightBrowserSingleton {
     const contextArray = this.contextPool.get(proxyServer);
     if (!contextArray || contextArray.length === 0) {
       console.log(`⚠️ [CLOSE CONTEXT] No contexts found for proxy ${proxyServer}`);
-      return;
+    } else {
+      console.log(`🔌 [CLOSE CONTEXT] Closing all contexts for proxy ${proxyServer}...`);
+      let closedCount = 0;
+
+      for (let i = 0; i < contextArray.length; i++) {
+        const context = contextArray[i];
+        if (!context) continue;
+
+        try {
+          console.log(`   Closing context ${i + 1}/${this.PROXY_MAX_CONTEXTS}...`);
+          await context.close();
+          contextArray[i] = undefined;
+          closedCount++;
+        } catch (error: any) {
+          console.error(`   ❌ Error closing context ${i + 1}: ${error.message}`);
+        }
+      }
+
+      this.contextPool.delete(proxyServer);
+      this.contextIndexPerProxy.set(proxyServer, 0);
+      console.log(`✅ [CLOSE CONTEXT] Closed ${closedCount}/${this.PROXY_MAX_CONTEXTS} contexts for proxy ${proxyServer}`);
     }
 
-    console.log(`🔌 [CLOSE CONTEXT] Closing all contexts for proxy ${proxyServer}...`);
-    let closedCount = 0;
-
-    for (let i = 0; i < contextArray.length; i++) {
-      const context = contextArray[i];
-      if (!context) continue;
-
+    // Also close and remove the browser instance to force fresh connection on next attempt
+    const browser = this.browserPool.get(proxyServer);
+    if (browser) {
       try {
-        console.log(`   Closing context ${i + 1}/${this.PROXY_MAX_CONTEXTS}...`);
-        await context.close();
-        contextArray[i] = undefined;
-        closedCount++;
+        console.log(`🔌 [CLOSE CONTEXT] Closing browser instance for proxy ${proxyServer}...`);
+        await browser.close();
+        this.browserPool.delete(proxyServer);
+        console.log(`✅ [CLOSE CONTEXT] Browser instance closed for proxy ${proxyServer}`);
       } catch (error: any) {
-        console.error(`   ❌ Error closing context ${i + 1}: ${error.message}`);
+        console.error(`⚠️ [CLOSE CONTEXT] Error closing browser for proxy ${proxyServer}: ${error.message}`);
+        // Still remove from pool even if close fails
+        this.browserPool.delete(proxyServer);
       }
     }
-
-    this.contextPool.delete(proxyServer);
-    this.contextIndexPerProxy.set(proxyServer, 0);
-    console.log(`✅ [CLOSE CONTEXT] Closed ${closedCount}/${this.PROXY_MAX_CONTEXTS} contexts for proxy ${proxyServer}`);
   }
 
   /**
@@ -354,6 +368,25 @@ export class PlaywrightBrowserSingleton {
       console.log(`✅ [CLOSE CONTEXT] Context closed successfully for proxy ${proxyServer}`);
     } catch (error: any) {
       console.error(`❌ [CLOSE CONTEXT] Error closing context: ${error.message}`);
+    }
+
+    // If all contexts are closed/undefined, also close browser instance
+    const allClosed = contextArray.every(ctx => !ctx);
+    if (allClosed) {
+      const browser = this.browserPool.get(proxyServer);
+      if (browser) {
+        try {
+          console.log(`🔌 [CLOSE CONTEXT] All contexts closed - closing browser instance for proxy ${proxyServer}...`);
+          await browser.close();
+          this.browserPool.delete(proxyServer);
+          this.contextPool.delete(proxyServer);
+          this.contextIndexPerProxy.set(proxyServer, 0);
+          console.log(`✅ [CLOSE CONTEXT] Browser instance closed for proxy ${proxyServer}`);
+        } catch (error: any) {
+          console.error(`⚠️ [CLOSE CONTEXT] Error closing browser: ${error.message}`);
+          this.browserPool.delete(proxyServer);
+        }
+      }
     }
   }
 

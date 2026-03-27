@@ -1,4 +1,4 @@
-import { isGiaoHangNhanh, isOnTrac, isSPX, isYunExpress } from "../";
+import { isASENDIA, isGiaoHangNhanh, isOnTrac, isSPX, isYunExpress } from "../";
 import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
 
 async function navigateToPage(page: any, url: string): Promise<void> {
@@ -115,6 +115,49 @@ async function getTrackingStatus(page: any, provider: string): Promise<string> {
 
       if (allText.includes('delivered')) {
         return 'DELIVERED';
+      }
+
+      return 'UNKNOWN';
+    });
+  } else if (isASENDIA(provider)) {
+    console.log(`📊 [TRACKING SHIPMENT] Getting tracking status for Asendia...`);
+    return await page.evaluate(() => {
+      const doc = (globalThis as any).document;
+
+      // Method 1: Check delivery_status from table
+      const deliveryStatusCell = doc.querySelector('[data-column-id="delivery_status"]');
+      const deliveryStatusText = deliveryStatusCell?.textContent?.trim() || '';
+      
+      if (deliveryStatusText.includes('Delivered') || 
+          deliveryStatusText.includes('Giao hàng thành công') || 
+          deliveryStatusText.includes('Đã giao hàng')) {
+        return 'DELIVERED';
+      }
+
+      // Method 2: Check stepper milestones for completed "Delivered" status
+      // The stepper shows steps: find "Delivered" step and check if it's completed
+      const stepperButtons = doc.querySelectorAll('.ParcelStatus_stepperMilestone__vqH9j');
+      
+      // Find the Delivered step (usually the last one with icon-Delivered)
+      for (const button of stepperButtons) {
+        const icon = button.querySelector('.icon-Delivered');
+        if (icon) {
+          // Check if this step is marked as done (has blue color/completed style)
+          const checkboxDiv = button.querySelector('.Stepper_done__B77P3');
+          if (checkboxDiv) {
+            // If Delivered step has a checkmark, it's delivered
+            return 'DELIVERED';
+          }
+        }
+      }
+
+      // Method 3: Check event status text in events table
+      const eventStatusCells = doc.querySelectorAll('[data-column-id="3"]');
+      for (const cell of eventStatusCells) {
+        const eventText = cell.textContent?.toLowerCase() || '';
+        if (eventText.includes('delivered')) {
+          return 'DELIVERED';
+        }
       }
 
       return 'UNKNOWN';
