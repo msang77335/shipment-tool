@@ -24,8 +24,8 @@ export {
   getGeminiApiKeyCount
 } from './geminiApiKeyRotator';
 
-// Blacklist Manager
-export { blacklistManager } from './blacklistManager';
+// Proxy Manager (includes blacklist tracking)
+export { proxyManager, type ProxyInfo } from './proxyManager';
 
 export function isUSPS(providerStr: string) {
   return providerStr.toUpperCase().includes('USPS');

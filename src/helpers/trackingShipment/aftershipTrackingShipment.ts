@@ -1,5 +1,5 @@
 import { Page } from 'playwright';
-import { applyStealthPatches, captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isJTExpress, isUSPS, ScreenshotQuery, setStealthHeaders, waitBeforeRetry, blacklistManager } from "..";
+import { applyStealthPatches, captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isJTExpress, isUSPS, ScreenshotQuery, setStealthHeaders, waitBeforeRetry, proxyManager } from "..";
 import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
 
 const getTrackingURL = (codes: string, provider: string) => {
@@ -168,7 +168,7 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
     console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected on page`);
     // Add to blacklist
     const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
-    blacklistManager.addToBlacklist({
+    proxyManager.addToBlacklist({
       provider,
       proxyServer: currentProxyServer,
       reason: 'QUOTA_EXCEEDED',
@@ -187,6 +187,15 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
     const buffer = await captureScreenshot(page);
     return { buffer, status };
   }
+
+  // No blocking issue AND no tracking data found → add to gray list
+  console.log(`⚠️ [AFTERSHIP] No tracking data found (not a blocking issue)`);
+  const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
+  proxyManager.addToGrayList({
+    provider,
+    proxyServer: currentProxyServer,
+    reason: 'NO_TRACKING_DATA'
+  });
 
   return null;
 }
@@ -226,7 +235,7 @@ async function retryScreenshotCapture({ codes, provider, maxRetries }: { codes: 
         console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected - closing context and will retry with new context`);
         const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
         // Add to blacklist
-        blacklistManager.addToBlacklist({
+        proxyManager.addToBlacklist({
           provider,
           proxyServer: currentProxyServer,
           reason: 'QUOTA_EXCEEDED',

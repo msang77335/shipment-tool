@@ -1,6 +1,7 @@
 import { Browser, BrowserContext } from 'playwright';
 import RecaptchaPlugin from 'puppeteer-extra-plugin-recaptcha';
 import { env } from '.';
+import { proxyManager } from './proxyManager';
 const { firefox } = require('playwright-extra')
 
 export class PlaywrightBrowserSingleton {
@@ -52,12 +53,20 @@ export class PlaywrightBrowserSingleton {
   }
   
   /**
-   * Get next proxy in rotation (requires proxies to be configured)
+   * Get next proxy in rotation (requires proxies to be configured in proxyManager)
    * Returns the proxy config along with its index
    */
   private static getNextProxyWithIndex() {
-    const proxy = env.proxies[this.proxyIndex % env.proxies.length];
-    const proxyCount = env.proxies.length;
+    const proxies = proxyManager.getAllProxies();
+    
+    if (!proxies || proxies.length === 0) {
+      const error = '❌ [PROXY] No proxies available in proxy manager!';
+      console.error(error);
+      throw new Error(error);
+    }
+
+    const proxy = proxies[this.proxyIndex % proxies.length];
+    const proxyCount = proxies.length;
     const currentIndex = this.proxyIndex % proxyCount;
     
     this.proxyIndex = (this.proxyIndex + 1) % proxyCount;
@@ -83,9 +92,10 @@ export class PlaywrightBrowserSingleton {
       return this.browserPool.get(proxyKey)!;
     }
     
-    // Ensure proxies are configured
-    if (!env.proxies || env.proxies.length === 0) {
-      const error = '❌ [BROWSER] No proxies configured! Use getInstanceWithoutProxy() for non-proxy browsing.';
+    // Ensure proxies are configured in proxy manager
+    const availableProxies = proxyManager.getAllProxies();
+    if (!availableProxies || availableProxies.length === 0) {
+      const error = '❌ [BROWSER] No proxies configured in proxy manager! Use getInstanceWithoutProxy() for non-proxy browsing.';
       console.error(error);
       throw new Error(error);
     }
