@@ -24,6 +24,9 @@ export {
   getGeminiApiKeyCount
 } from './geminiApiKeyRotator';
 
+// Blacklist Manager
+export { blacklistManager } from './blacklistManager';
+
 export function isUSPS(providerStr: string) {
   return providerStr.toUpperCase().includes('USPS');
 }

@@ -1,5 +1,5 @@
 import { Page } from 'playwright';
-import { applyStealthPatches, captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isJTExpress, isUSPS, ScreenshotQuery, setStealthHeaders, waitBeforeRetry } from "..";
+import { applyStealthPatches, captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isJTExpress, isUSPS, ScreenshotQuery, setStealthHeaders, waitBeforeRetry, blacklistManager } from "..";
 import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
 
 const getTrackingURL = (codes: string, provider: string) => {
@@ -85,16 +85,8 @@ async function checkForQuotaOrBlockingIssues(page: Page): Promise<boolean> {
   console.log(`🔍 [AFTERSHIP] Checking for quota/blocking issues...`);
   return await page.evaluate(() => {
     const pageText = (globalThis as any).document.body.innerText || '';
-    const pageHTML = (globalThis as any).document.body.innerHTML || '';
     
-    // Check for various blocking/quota messages
-    const blockingPatterns = [
-      /Quota Exceeded/,
-    ];
-
-    return blockingPatterns.some(pattern => 
-      pattern.test(pageText) || pattern.test(pageHTML)
-    );
+    return pageText.includes('Quota Exceeded');
   });
 }
 
@@ -174,6 +166,14 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
   const hasBlockingIssue = await checkForQuotaOrBlockingIssues(page);
   if (hasBlockingIssue) {
     console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected on page`);
+    // Add to blacklist
+    const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
+    blacklistManager.addToBlacklist({
+      provider,
+      proxyServer: currentProxyServer,
+      reason: 'QUOTA_EXCEEDED',
+      code: codes
+    });
     return null; // Signal retry with context close
   }
 
@@ -225,6 +225,13 @@ async function retryScreenshotCapture({ codes, provider, maxRetries }: { codes: 
       if (hasBlockingIssue) {
         console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected - closing context and will retry with new context`);
         const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
+        // Add to blacklist
+        blacklistManager.addToBlacklist({
+          provider,
+          proxyServer: currentProxyServer,
+          reason: 'QUOTA_EXCEEDED',
+          code: codes
+        });
         if (currentProxyServer) {
           await PlaywrightBrowserSingleton.closeContextForProxy(currentProxyServer);
           console.log(`✅ [AFTERSHIP] Context closed for proxy ${currentProxyServer}`);
