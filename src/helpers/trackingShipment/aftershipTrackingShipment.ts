@@ -81,6 +81,30 @@ async function checkTrackingData(page: Page): Promise<boolean> {
   });
 }
 
+async function checkForQuotaOrBlockingIssues(page: Page): Promise<boolean> {
+  console.log(`🔍 [AFTERSHIP] Checking for quota/blocking issues...`);
+  return await page.evaluate(() => {
+    const pageText = (globalThis as any).document.body.innerText || '';
+    const pageHTML = (globalThis as any).document.body.innerHTML || '';
+    
+    // Check for various blocking/quota messages
+    const blockingPatterns = [
+      /Quota\s+Exceeded/i,
+      /track\s+limit/i,
+      /rate\s+limit/i,
+      /Too\s+many\s+requests/i,
+      /Please\s+try\s+again\s+later/i,
+      /currently\s+unavailable/i,
+      /access\s+denied/i,
+      /temporarily\s+blocked/i
+    ];
+
+    return blockingPatterns.some(pattern => 
+      pattern.test(pageText) || pattern.test(pageHTML)
+    );
+  });
+}
+
 async function getAllShipments(page: Page): Promise<{ status: string }> {
   const shipments = await page.evaluate(() => {
     try {
@@ -153,6 +177,13 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
   const trackingURL = getTrackingURL(codes, provider);
   await navigateAndSolveRecaptcha(page, trackingURL, attempt, maxRetries);
 
+  // Check for quota/blocking issues first
+  const hasBlockingIssue = await checkForQuotaOrBlockingIssues(page);
+  if (hasBlockingIssue) {
+    console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected on page`);
+    return null; // Signal retry with context close
+  }
+
   const hasTrackingData = await checkTrackingData(page);
 
   if (hasTrackingData) {
@@ -167,12 +198,20 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
   return null;
 }
 
-async function retryScreenshotCapture({ browserContext, codes, provider, maxRetries }: { browserContext: any; codes: string; provider: string; maxRetries: number; }): Promise<{ buffer: Buffer; status: string }> {
+async function retryScreenshotCapture({ codes, provider, maxRetries }: { codes: string; provider: string; maxRetries: number; }): Promise<{ buffer: Buffer; status: string }> {
   let lastError;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let page: Page | undefined;
+    let browserContext: any = null;
+
     try {
+      console.log(`🆕 [AFTERSHIP] Getting browser context (attempt ${attempt}/${maxRetries})...`);
+      browserContext = await PlaywrightBrowserSingleton.getContextWithProxy();
+      if (!browserContext) {
+        throw new Error('Failed to get browser context');
+      }
+
       console.log(`🆕 [AFTERSHIP] Creating new page (attempt ${attempt}/${maxRetries})...`);
       page = await createPage(browserContext);
 
@@ -180,19 +219,48 @@ async function retryScreenshotCapture({ browserContext, codes, provider, maxRetr
 
       if (result) {
         await closePage(page);
+        console.log(`✅ [AFTERSHIP] Successfully captured screenshot on attempt ${attempt}`);
         return result;
+      }
+
+      // No data found - check if it's due to quota/blocking issue
+      const hasBlockingIssue = await checkForQuotaOrBlockingIssues(page);
+      
+      if (hasBlockingIssue) {
+        console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected - closing context and will retry with new context`);
+        const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
+        if (currentProxyServer) {
+          await PlaywrightBrowserSingleton.closeContextForProxy(currentProxyServer);
+          console.log(`✅ [AFTERSHIP] Context closed for proxy ${currentProxyServer}`);
+        }
       }
 
       if (attempt < maxRetries) {
         await closePage(page);
+        console.log(`⏳ [AFTERSHIP] No data found, waiting before retry ${attempt}/${maxRetries}...`);
         await waitBeforeRetry(attempt);
       } else {
+        console.log(`⚠️ [AFTERSHIP] Last attempt - capturing screenshot anyway`);
         return await captureLastAttemptScreenshot(page);
       }
     } catch (error: any) {
       lastError = error;
       console.error(`💥 [AFTERSHIP] Attempt ${attempt}/${maxRetries} failed:`, error.message);
+      
+      // Try to close context on error
+      if (browserContext) {
+        try {
+          const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
+          if (currentProxyServer) {
+            await PlaywrightBrowserSingleton.closeContextForProxy(currentProxyServer);
+          }
+        } catch (closeError) {
+          console.error(`⚠️ [AFTERSHIP] Failed to close context on error:`, closeError);
+        }
+      }
+
       await closePage(page);
+      
       if (attempt < maxRetries) {
         await waitBeforeRetry(attempt);
       }
@@ -206,15 +274,10 @@ async function retryScreenshotCapture({ browserContext, codes, provider, maxRetr
 export async function aftershipTrackingShipment({ codes, provider }: ScreenshotQuery): Promise<{ status: string; buffer: Buffer }> {
   console.log(`📍 [AFTERSHIP] Starting screenshot for tracking: ${codes}`);
 
-  const browserContext = await PlaywrightBrowserSingleton.getContextWithProxy();
-  if (!browserContext) {
-    throw new Error('Failed to get browser context');
-  }
-
   const maxRetries = 3;
 
   try {
-    const { buffer, status } = await retryScreenshotCapture({ browserContext, codes, provider, maxRetries });
+    const { buffer, status } = await retryScreenshotCapture({ codes, provider, maxRetries });
 
     const statusArray = status.split(',');
     const allDelivered = statusArray.every(s => s === 'DELIVERED');
@@ -224,7 +287,7 @@ export async function aftershipTrackingShipment({ codes, provider }: ScreenshotQ
       status: allDelivered ? 'DELIVERED' : 'UNKNOWN'
     };
   } catch (error) {
-    console.error(`💥 [AFTERSHIP] Error in aftershipScreenshouter:`, error);
+    console.error(`💥 [AFTERSHIP] Error in aftershipTrackingShipment:`, error);
     throw error;
   }
 }

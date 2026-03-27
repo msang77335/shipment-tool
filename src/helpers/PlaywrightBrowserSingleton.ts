@@ -7,8 +7,9 @@ export class PlaywrightBrowserSingleton {
   // Browser pool: one browser instance per proxy
   private static browserPool: Map<string, Browser> = new Map(); // key: proxy server URL
   
-  // Context pool: one context per proxy (dính chặt với proxy)
-  private static contextPool: Map<string, BrowserContext> = new Map(); // key: proxy server URL
+  // Context pool: multiple contexts per proxy (round-robin, max 3 per proxy)
+  private static contextPool: Map<string, (BrowserContext | undefined)[]> = new Map(); // key: proxy server URL
+  private static contextIndexPerProxy: Map<string, number> = new Map(); // track round-robin index per proxy
   
   private static proxyIndex: number = 0; // for round-robin proxy selection
   private static currentProxyServer: string = ''; // Track which proxy is being used
@@ -18,6 +19,7 @@ export class PlaywrightBrowserSingleton {
   private static nonProxyBrowserContexts: (BrowserContext | undefined)[] = [];
   private static nonProxyContextIndex: number = 0;
   private static readonly NON_PROXY_MAX_CONTEXTS = 3;
+  private static readonly PROXY_MAX_CONTEXTS = 3;
   
   /**
    * Check if a browser context is still valid and usable
@@ -116,19 +118,16 @@ export class PlaywrightBrowserSingleton {
         console.log(`🔌 [BROWSER] Browser disconnected (proxy: ${proxyKey})`);
         this.browserPool.delete(proxyKey);
         this.contextPool.delete(proxyKey);
+        this.contextIndexPerProxy.delete(proxyKey);
       });
     }
     
-    // Initialize context for this proxy if not exists
+    // Initialize context array for this proxy if not exists
     if (!this.contextPool.has(proxyKey)) {
-      console.log(`🆕 [CONTEXT] Creating context for proxy ${proxyKey}...`);
-      const context = await browserInstance.newContext({ viewport: { width: 1280, height: 1080 } });
-      context.on('close', () => {
-        console.log(`🔌 [CONTEXT] Context closed for proxy ${proxyKey}`);
-        this.contextPool.delete(proxyKey);
-      });
-      this.contextPool.set(proxyKey, context);
-      console.log(`✅ [CONTEXT] Context created and stored for proxy ${proxyKey}`);
+      console.log(`🆕 [CONTEXT] Creating context pool for proxy ${proxyKey} (${this.PROXY_MAX_CONTEXTS} max)...`);
+      this.contextPool.set(proxyKey, []);
+      this.contextIndexPerProxy.set(proxyKey, 0);
+      console.log(`✅ [CONTEXT] Context pool initialized for proxy ${proxyKey}`);
     }
     
     this.browserPool.set(proxyKey, browserInstance);
@@ -148,24 +147,52 @@ export class PlaywrightBrowserSingleton {
 
     const proxyKey = proxy.server;
     
-    // Get context for this proxy (dính chặt, không xoay)
-    const context = this.contextPool.get(proxyKey);
-    
-    if (!context) {
-      console.error('❌ [BROWSER CONTEXT] Context not found for proxy');
+    // Get context pool for this proxy
+    let contextArray = this.contextPool.get(proxyKey);
+    if (!contextArray) {
+      console.error('❌ [BROWSER CONTEXT] Context pool not found for proxy');
       return null;
     }
+
+    // Get current round-robin index for this proxy
+    const currentContextIndex = this.contextIndexPerProxy.get(proxyKey) ?? 0;
+    const nextContextIndex = currentContextIndex % this.PROXY_MAX_CONTEXTS;
+
+    console.log(`📋 [CONTEXT CHECK-PROXY] Checking context ${nextContextIndex + 1}/${this.PROXY_MAX_CONTEXTS} for proxy [${index + 1}/${total}]`);
     
-    // Verify context is still valid
-    if (context.browser()) {
-      console.log(`♻️ [BROWSER CONTEXT] Reusing context for proxy [${index + 1}/${total}] ${proxyKey}`);
-      console.log(`   This context is permanently attached to this proxy`);
-      return context;
+    // Check if context exists and is still valid
+    const existingContext = contextArray[nextContextIndex];
+    console.log(`   Existing context: ${existingContext ? 'Found' : 'Not found'}`);
+    
+    const isContextValid = existingContext ? this.isContextStillValid(existingContext) : false;
+
+    // Create context lazily only when needed
+    if (isContextValid) {
+      console.log(`♻️ [BROWSER-PROXY] Reusing context ${nextContextIndex + 1}/${this.PROXY_MAX_CONTEXTS} for proxy ${proxyKey}`);
     } else {
-      console.error('❌ [BROWSER CONTEXT] Context browser is disconnected');
-      this.contextPool.delete(proxyKey);
-      return null;
+      if (existingContext) {
+        console.log(`🔄 [CONTEXT CHECK-PROXY] Existing context is invalid, creating new one...`);
+      }
+      console.log(`🆕 [BROWSER-PROXY] Creating context ${nextContextIndex + 1} on demand for proxy ${proxyKey}...`);
+      const context = await browser.newContext({ viewport: { width: 1280, height: 1080 } });
+      console.log(`   ✅ Context instance created`);
+      
+      context.on('close', () => {
+        console.log(`🔌 [BROWSER-PROXY] Browser context ${nextContextIndex + 1} CLOSED EVENT for proxy ${proxyKey}`);
+        contextArray[nextContextIndex] = undefined;
+      });
+      contextArray[nextContextIndex] = context;
+      console.log(`✅ [BROWSER-PROXY] Context ${nextContextIndex + 1} created and stored for proxy ${proxyKey}`);
     }
+
+    const context = contextArray[nextContextIndex] ?? null;
+    
+    // Update round-robin index for next call
+    const nextIndex = (currentContextIndex + 1) % this.PROXY_MAX_CONTEXTS;
+    this.contextIndexPerProxy.set(proxyKey, nextIndex);
+    console.log(`   Next context index for proxy ${proxyKey} will be: ${nextIndex}`);
+
+    return context;
   }
 
   /**
@@ -262,5 +289,78 @@ export class PlaywrightBrowserSingleton {
     console.log(`   Next context index will be: ${this.nonProxyContextIndex % this.NON_PROXY_MAX_CONTEXTS}`);
 
     return context;
+  }
+
+  /**
+   * Close context for a specific proxy
+   * @param proxyServer - The proxy server URL
+   */
+  static async closeContextForProxy(proxyServer: string): Promise<void> {
+    const contextArray = this.contextPool.get(proxyServer);
+    if (!contextArray || contextArray.length === 0) {
+      console.log(`⚠️ [CLOSE CONTEXT] No contexts found for proxy ${proxyServer}`);
+      return;
+    }
+
+    console.log(`🔌 [CLOSE CONTEXT] Closing all contexts for proxy ${proxyServer}...`);
+    let closedCount = 0;
+
+    for (let i = 0; i < contextArray.length; i++) {
+      const context = contextArray[i];
+      if (!context) continue;
+
+      try {
+        console.log(`   Closing context ${i + 1}/${this.PROXY_MAX_CONTEXTS}...`);
+        await context.close();
+        contextArray[i] = undefined;
+        closedCount++;
+      } catch (error: any) {
+        console.error(`   ❌ Error closing context ${i + 1}: ${error.message}`);
+      }
+    }
+
+    this.contextPool.delete(proxyServer);
+    this.contextIndexPerProxy.set(proxyServer, 0);
+    console.log(`✅ [CLOSE CONTEXT] Closed ${closedCount}/${this.PROXY_MAX_CONTEXTS} contexts for proxy ${proxyServer}`);
+  }
+
+  /**
+   * Close a specific context by index for a proxy
+   * @param proxyServer - The proxy server URL
+   * @param contextIndex - The context index (0-based)
+   */
+  static async closeSpecificContextForProxy(proxyServer: string, contextIndex: number): Promise<void> {
+    if (contextIndex < 0 || contextIndex >= this.PROXY_MAX_CONTEXTS) {
+      console.error(`❌ [CLOSE CONTEXT] Invalid context index ${contextIndex} for proxy ${proxyServer}`);
+      return;
+    }
+
+    const contextArray = this.contextPool.get(proxyServer);
+    if (!contextArray) {
+      console.log(`⚠️ [CLOSE CONTEXT] No context pool found for proxy ${proxyServer}`);
+      return;
+    }
+
+    const context = contextArray[contextIndex];
+    if (!context) {
+      console.log(`⚠️ [CLOSE CONTEXT] No context found at index ${contextIndex} for proxy ${proxyServer}`);
+      return;
+    }
+
+    try {
+      console.log(`🔌 [CLOSE CONTEXT] Closing context ${contextIndex + 1}/${this.PROXY_MAX_CONTEXTS} for proxy ${proxyServer}...`);
+      await context.close();
+      contextArray[contextIndex] = undefined;
+      console.log(`✅ [CLOSE CONTEXT] Context closed successfully for proxy ${proxyServer}`);
+    } catch (error: any) {
+      console.error(`❌ [CLOSE CONTEXT] Error closing context: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get the current proxy server being used
+   */
+  static getCurrentProxyServer(): string {
+    return this.currentProxyServer;
   }
 }
