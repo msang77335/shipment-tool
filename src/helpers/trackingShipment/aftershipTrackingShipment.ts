@@ -1,5 +1,5 @@
 import { Page } from 'playwright';
-import { captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isJTExpress, isUSPS, ScreenshotQuery, waitBeforeRetry } from "..";
+import { applyStealthPatches, captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isJTExpress, isUSPS, ScreenshotQuery, setStealthHeaders, waitBeforeRetry } from "..";
 import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
 
 const getTrackingURL = (codes: string, provider: string) => {
@@ -18,18 +18,18 @@ async function navigateAndSolveRecaptcha(page: Page, trackingURL: string, attemp
   });
   console.log(`✅ [AFTERSHIP] Page loaded successfully`);
 
-  // console.log(`🔍 [AFTERSHIP] Attempting to solve reCAPTCHAs...`);
-  // const result = await page.solveRecaptchas();
-  // console.log(`✅ [AFTERSHIP] reCAPTCHA result:`, {
-  //   captchasFound: result.captchas?.length || 0,
-  //   solutionsCount: result.solutions?.length || 0,
-  //   solvedCount: result.solved?.length || 0,
-  //   hasError: !!result.error
-  // });
+  console.log(`🔍 [AFTERSHIP] Attempting to solve reCAPTCHAs...`);
+  const result = await page.solveRecaptchas();
+  console.log(`✅ [AFTERSHIP] reCAPTCHA result:`, {
+    captchasFound: result.captchas?.length || 0,
+    solutionsCount: result.solutions?.length || 0,
+    solvedCount: result.solved?.length || 0,
+    hasError: !!result.error
+  });
 
-  // if (result.error) {
-  //   console.log(`⚠️ [AFTERSHIP] reCAPTCHA solving error:`, result.error);
-  // }
+  if (result.error) {
+    console.log(`⚠️ [AFTERSHIP] reCAPTCHA solving error:`, result.error);
+  }
 
   console.log(`⏳ [AFTERSHIP] Waiting 15 seconds for content to load...`);
   await new Promise(resolve => setTimeout(resolve, 15000));
@@ -89,17 +89,7 @@ async function checkForQuotaOrBlockingIssues(page: Page): Promise<boolean> {
     
     // Check for various blocking/quota messages
     const blockingPatterns = [
-      /Quota\s+Exceeded/i,
-      /You've\s+reached\s+your\s+track\s+limit/i,
-      /reached\s+your\s+track\s+limit/i,
-      /track\s+limit/i,
-      /rate\s+limit/i,
-      /Too\s+many\s+requests/i,
-      /Please\s+try\s+again\s+later/i,
-      /currently\s+unavailable/i,
-      /access\s+denied/i,
-      /temporarily\s+blocked/i,
-      /Download\s+the\s+mobile\s+app/i
+      /Quota Exceeded/,
     ];
 
     return blockingPatterns.some(pattern => 
@@ -217,6 +207,9 @@ async function retryScreenshotCapture({ codes, provider, maxRetries }: { codes: 
 
       console.log(`🆕 [AFTERSHIP] Creating new page (attempt ${attempt}/${maxRetries})...`);
       page = await createPage(browserContext);
+
+      await applyStealthPatches(page);
+      await setStealthHeaders(page);
 
       const result = await attemptScreenshot({ page, codes, provider, attempt, maxRetries });
 

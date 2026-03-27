@@ -1,42 +1,11 @@
 import { Page } from 'playwright';
 import { snakeCase } from 'lodash';
 import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
-import { ScreenshotQuery } from '..';
+import { applyStealthPatches, ScreenshotQuery, setStealthHeaders } from '..';
 
 const USPS_TRACKING_URL = (codes: string) =>
   `https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=${encodeURIComponent(codes)}&tABt=true`;
 
-const VIEWPORTS = [
-  { width: 1920, height: 1080 },
-  { width: 1440, height: 900 },
-  { width: 1366, height: 768 },
-  { width: 1280, height: 800 },
-  { width: 1536, height: 864 },
-];
-
-const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-];
-
-async function setStealthHeaders(page: Page): Promise<void> {
-  const ua = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-  const vp = VIEWPORTS[Math.floor(Math.random() * VIEWPORTS.length)];
-  await page.setViewportSize(vp);
-  await page.setExtraHTTPHeaders({
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none',
-    'Sec-Fetch-User': '?1',
-    'Upgrade-Insecure-Requests': '1',
-    'Cache-Control': 'max-age=0',
-  });
-  console.log(`🥸 [USPS] UA: ${ua.slice(0, 60)}... | Viewport: ${vp.width}x${vp.height}`);
-}
 
 async function waitForTrackingData(page: Page): Promise<boolean> {
   console.log(`🔍 [USPS] Waiting for tracking results to appear...`);
@@ -87,36 +56,6 @@ async function getShipmentStatus(page: Page): Promise<string> {
     if (/delivered/i.test(bannerText)) return 'DELIVERED';
 
     return 'UNKNOWN';
-  });
-}
-
-/**
- * Patch fingerprinting signals that Playwright's headless mode expose.
- * Must be called BEFORE navigation so it applies via addInitScript.
- */
-async function applyStealthPatches(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    const nav = (globalThis as any).navigator;
-    const win = globalThis as any;
-
-    Object.defineProperty(nav, 'webdriver', { get: () => undefined });
-
-    const pluginList: any[] = [
-      { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
-      { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
-      { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' },
-    ];
-    Object.defineProperty(pluginList, 'item', { value: (i: number) => pluginList[i] });
-    Object.defineProperty(pluginList, 'namedItem', { value: (n: string) => pluginList.find((p) => p.name === n) ?? null });
-    Object.defineProperty(pluginList, 'refresh', { value: () => {} });
-    Object.defineProperty(nav, 'plugins', { get: () => pluginList });
-
-    Object.defineProperty(nav, 'hardwareConcurrency', { get: () => 8 });
-    Object.defineProperty(nav, 'deviceMemory', { get: () => 8 });
-    Object.defineProperty(nav, 'languages', { get: () => ['en-US', 'en'] });
-
-    const markers = ['__playwright', '__pwInitScripts', '__pw_manual', '_phantom', '__nightmare', 'callPhantom', '__webdriver_script_fn', '__selenium_unwrapped'];
-    markers.forEach((k) => { try { delete win[k]; } catch { /* ignore */ } });
   });
 }
 

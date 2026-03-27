@@ -107,6 +107,10 @@ export async function waitBeforeRetry(attempt: number): Promise<void> {
 }
 
 export async function captureLastAttemptScreenshot(page: Page, width = 1280, height = 1080): Promise<{ buffer: Buffer; status: string }> {
+  if (page.isClosed()) {
+    console.warn(`⚠️ [Helper] Page is already closed, cannot capture error screenshot`);
+    return { buffer: Buffer.alloc(0), status: 'UNKNOWN' };
+  }
   const errorScreenshot = await page.screenshot({ fullPage: false, clip: { x: 0, y: 0, width, height } });
   console.error(`💥 [Helper] Final attempt failed, capturing error screenshot...`);
   await closePage(page);
@@ -119,4 +123,53 @@ export async function captureScreenshot(page: Page, width = 1280, height = 1080)
   console.log(`✅ [Helper] Screenshot captured, size: ${screenshot.length} bytes`);
   console.log(`✨ [Helper] All done!`);
   return Buffer.from(screenshot);
+}
+
+export async function applyStealthPatches(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const nav = (globalThis as any).navigator;
+    const win = globalThis as any;
+
+    Object.defineProperty(nav, 'webdriver', { get: () => undefined });
+
+    const pluginList: any[] = [
+      { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+      { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+      { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' },
+    ];
+    Object.defineProperty(pluginList, 'item', { value: (i: number) => pluginList[i] });
+    Object.defineProperty(pluginList, 'namedItem', { value: (n: string) => pluginList.find((p) => p.name === n) ?? null });
+    Object.defineProperty(pluginList, 'refresh', { value: () => {} });
+    Object.defineProperty(nav, 'plugins', { get: () => pluginList });
+
+    Object.defineProperty(nav, 'hardwareConcurrency', { get: () => 8 });
+    Object.defineProperty(nav, 'deviceMemory', { get: () => 8 });
+    Object.defineProperty(nav, 'languages', { get: () => ['en-US', 'en'] });
+
+    const markers = ['__playwright', '__pwInitScripts', '__pw_manual', '_phantom', '__nightmare', 'callPhantom', '__webdriver_script_fn', '__selenium_unwrapped'];
+    markers.forEach((k) => { try { delete win[k]; } catch { /* ignore */ } });
+  });
+}
+
+
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+];
+
+export async function setStealthHeaders(page: Page): Promise<void> {
+  const ua = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Upgrade-Insecure-Requests': '1',
+    'Cache-Control': 'max-age=0',
+  });
+  console.log(`🥸 [Stealth] UA: ${ua.slice(0, 60)}...`);
 }
