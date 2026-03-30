@@ -65,8 +65,8 @@ async function solveCaptchaAndSearch(page: Page, code: string): Promise<void> {
   await searchButton.waitFor({ state: 'visible', timeout: 10000 });
   await searchButton.click();
 
-  console.log(`⏳ [VN POST SCREENSHOT] Waiting 10 seconds for results...`);
-  await new Promise(resolve => setTimeout(resolve, 10000));
+  console.log(`⏳ [VN POST SCREENSHOT] Waiting 20 seconds for results...`);
+  await new Promise(resolve => setTimeout(resolve, 20000));
 }
 
 async function checkTrackingDataPresent(page: Page): Promise<boolean> {
