@@ -89,9 +89,21 @@ const processingTracking = async (cellPhone: string, codes: string, proxy: Proxy
   };
   try {
     if (proxy) {
-      const proxyUrl = `http://${proxy.username}:${proxy.password}@${proxy.server}`;
-      requestConfig.httpAgent = new HttpProxyAgent(proxyUrl);
-      requestConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+      const username = proxy.username?.trim();
+      const password = proxy.password?.trim();
+      let server = proxy.server?.trim();
+      
+      // Validate all proxy components are non-empty
+      if (username && password && server) {
+        // Remove protocol prefix if present (proxy.server comes as "http://ip:port")
+        server = server.replace(/^https?:\/\//, '');
+        
+        const encodedUsername = encodeURIComponent(username);
+        const encodedPassword = encodeURIComponent(password);
+        const proxyUrl = `http://${encodedUsername}:${encodedPassword}@${server}`;
+        requestConfig.httpAgent = new HttpProxyAgent(proxyUrl);
+        requestConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+      }
     }
     const response = await axiosclient.get(
       trackingUrl,
