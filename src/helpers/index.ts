@@ -89,6 +89,11 @@ export function isASENDIA(providerStr: string) {
   return upperStr.includes('ASENDIA');
 }
 
+export function isSingPost(providerStr: string) {
+  const upperStr = providerStr.toUpperCase();
+  return upperStr.includes('SINGPOST') || upperStr.includes('SING POST');
+}
+
 export async function createPage(browserContext: any): Promise<Page> {
   const page = await browserContext.newPage();
   page.setDefaultTimeout(120000);

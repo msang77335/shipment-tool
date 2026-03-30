@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { isASENDIA, isBestExpress, isEVRI, isGiaoHangNhanh, isJTExpress, isOnTrac, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { isASENDIA, isBestExpress, isEVRI, isGiaoHangNhanh, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
 import { evriTrackingShipment } from '../helpers/trackingShipment/evriTrackingShipment';
@@ -9,6 +9,7 @@ import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingSh
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
+import { singPostTrackingShipment } from '../helpers/trackingShipment/singPostTrackingShipment';
 
 const router = Router();
 
@@ -65,6 +66,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       result = await evriTrackingShipment({ codes });
     } else if (isASENDIA(provider)) {
       result = await trackingShipment(`https://track.asendia.com/track/${codes}`, provider);
+    } else if (isSingPost(provider)) {
+      result = await singPostTrackingShipment({ codes });
     } else {
       console.log(`❌ [TRACKING IMAGE] Unsupported provider: ${provider}`);
       res.status(400).json({
