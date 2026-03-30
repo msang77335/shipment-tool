@@ -85,8 +85,30 @@ function parseProxies(): ProxyConfig[] {
 }
 
 /**
- * Get environment configuration with defaults and type safety
+ * Parse JNT phone list from environment variable
+ * Format: comma-separated list "phone1,phone2,phone3"
+ * Example: "3942,0123456789"
  */
+function parseJntPhoneList(): string[] {
+  const jntPhoneEnv = process.env.JNT_PHONE_LIST || '';
+  
+  if (!jntPhoneEnv.trim()) {
+    console.log('📞 [JNT PHONE LIST] No phone numbers configured');
+    return [];
+  }
+  
+  const phoneList = jntPhoneEnv
+    .split(',')
+    .map(phone => phone.trim())
+    .filter(phone => phone.length > 0);
+  
+  console.log(`📞 [JNT PHONE LIST] Loaded ${phoneList.length} phone number(s)`);
+  phoneList.forEach((phone, index) => {
+    console.log(`   [${index + 1}] ${phone}`);
+  });
+  
+  return phoneList;
+}
 export function getEnv(): EnvConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
   
@@ -125,8 +147,11 @@ export function getEnv(): EnvConfig {
     // Shopee device fingerprint cookie
     shopeeSpcF: process.env.SHOPEE_SPC_F || undefined,
 
-    // JNT Phone List
-    jntPhoneList: process.env.JNT_PHONE_LIST || undefined,
+    // JNT Phone List - parse and log during initialization
+    jntPhoneList: (() => {
+      parseJntPhoneList(); // Call to log the phone list
+      return process.env.JNT_PHONE_LIST || undefined;
+    })(),
   };
 }
 
