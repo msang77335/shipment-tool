@@ -128,9 +128,11 @@ const processingTracking = async (cellPhone: string, codes: string, proxy: Proxy
 export const jntShipmentTrackingShipment = async (codes: string) => {
   const trackingData = await trackingJnTPage(codes);
   if (trackingData.success) {
+    const overallStatus = determineOverallStatus(trackingData?.data ?? []);
+    const buffer = await renderShipmentHtml({ success: trackingData?.success, data: trackingData.data ?? [] });
     return {
-      status: "DELIVERED",
-      buffer: Buffer.from(JSON.stringify(trackingData.data), 'utf-8')
+      status: overallStatus,
+      buffer: buffer
     };
   } else {
     return aftershipTrackingShipment({ codes, provider: "J&T" });
@@ -164,11 +166,9 @@ function determineOverallStatus(shipments: any[]): string {
 /**
  * Render shipment tracking data as HTML buffer
  */
-export const renderShipmentHtml = async (codes: string): Promise<Buffer> => {
+export const renderShipmentHtml = async (trackingData: { success: boolean; data: any[] }): Promise<Buffer> => {
   let page;
   try {
-    const trackingData = await trackingJnTPage(codes);
-
     const templatePath = join(__dirname, '../../..', 'templates', 'shipment-list.html');
     let htmlTemplate = readFileSync(templatePath, 'utf-8');
 
@@ -250,8 +250,8 @@ async function renderErrorPage(html: string): Promise<Buffer> {
 
     return Buffer.from(screenshot);
   } catch (error) {
-    // If screenshot fails, return simple error as UTF-8 buffer
-    return Buffer.from(html, 'utf-8');
+    console.error('Error rendering error page:', error);
+    return Buffer.from(html);
   } finally {
     if (page) await page.close();
   }
