@@ -48,6 +48,9 @@ export interface EnvConfig {
 
   // Shopee device fingerprint cookie
   shopeeSpcF?: string;
+
+  // JNT Phone List
+  jntPhoneList?: string;
 }
 
 /**
@@ -121,6 +124,9 @@ export function getEnv(): EnvConfig {
 
     // Shopee device fingerprint cookie
     shopeeSpcF: process.env.SHOPEE_SPC_F || undefined,
+
+    // JNT Phone List
+    jntPhoneList: process.env.JNT_PHONE_LIST || undefined,
   };
 }
 

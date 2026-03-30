@@ -1,14 +1,14 @@
-import { uniTrackingShipment } from '../helpers/trackingShipment/uniTrackingShipment';
 import { Request, Response, Router } from 'express';
 import { isASENDIA, isBestExpress, isEVRI, isGiaoHangNhanh, isJTExpress, isOnTrac, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
-import { aftershipTrackingShipment } from '../helpers/trackingShipment/aftershipTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
+import { evriTrackingShipment } from '../helpers/trackingShipment/evriTrackingShipment';
+import { jntShipmentTrackingShipment, renderShipmentHtml } from '../helpers/trackingShipment/jntTrackingShipment';
+import { uniTrackingShipment } from '../helpers/trackingShipment/uniTrackingShipment';
+import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingShipment';
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
-import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingShipment';
-import { evriTrackingShipment } from '../helpers/trackingShipment/evriTrackingShipment';
 
 const router = Router();
 
@@ -52,11 +52,9 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     } else if (isYW(provider)) {
       result = await ywTrackingShipment({ codes });
     } else if (isJTExpress(provider)) {
-      result = await aftershipTrackingShipment({ codes, provider });
+      result = await jntShipmentTrackingShipment(codes);
     } else if (isUSPS(provider) && codes.split(',').length === 1) {
       result = await uspsTrackingShipment({ codes });
-    } else if (isUSPS(provider) && codes.split(',').length > 1) {
-      result = await aftershipTrackingShipment({ codes, provider });
     } else if (isVnPost(provider)) {
       result = await vnPostTrackingShipment(codes);
     } else if (isBestExpress(provider)) {
@@ -99,6 +97,60 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({
       success: false,
       error: 'Failed to get tracking image',
+      message: error.message,
+      duration: `${duration}ms`
+    });
+  }
+});
+
+// GET /api/v1/tracking/html - Get tracking info as HTML page
+router.get('/html', async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  console.log(`🌐 [TRACKING HTML] Starting request at ${new Date().toISOString()}`);
+
+  try {
+    const { codes, provider } = req.query;
+
+    if (!codes || typeof codes !== 'string') {
+      console.log(`❌ [TRACKING HTML] Missing codes parameter`);
+      res.status(400).json({
+        success: false,
+        error: 'codes parameter is required'
+      });
+      return;
+    }
+
+    // Check if provider is J&T
+    if (provider && !isJTExpress(provider as string)) {
+      console.log(`⚠️  [TRACKING HTML] J&T provider is currently supported. Requested: ${provider}`);
+      res.status(400).json({
+        success: false,
+        error: 'Only J&T provider is currently supported for HTML rendering'
+      });
+      return;
+    }
+
+    console.log(`📦 [TRACKING HTML] Processing tracking codes: ${codes}`);
+
+    const imageBuffer = await renderShipmentHtml(codes);
+    
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    console.log(`✅ [TRACKING HTML] Completed successfully in ${duration}ms`);
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Length', imageBuffer.length.toString());
+    res.setHeader('X-Processing-Time', `${duration}ms`);
+    res.send(imageBuffer);
+  } catch (error: any) {
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    console.error(`💥 [TRACKING HTML] Error occurred after ${duration}ms:`, error);
+    console.error(`💥 [TRACKING HTML] Error stack:`, error.stack);
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get tracking HTML',
       message: error.message,
       duration: `${duration}ms`
     });
