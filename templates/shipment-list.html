@@ -146,19 +146,9 @@
             padding-top: 2px;
         }
 
-        .highlight-name {
-            color: #1F8DDC;
-            font-weight: 600;
-        }
-
         .highlight-location {
             color: #1F8DDC;
-            font-weight: 600;
-        }
-
-        .highlight-phone {
-            color: #1F8DDC;
-            font-weight: 600;
+            font-weight: 300;
         }
 
         .event-details {
@@ -253,29 +243,14 @@
             return `<span class="highlight-phone">${phone}</span>`;
         }
 
-        function formatStatusWithHighlights(status, name, location, phone) {
+        function formatStatusWithHighlights(status, location) {
             let formatted = status;
             
-            if (location) {
-                formatted = formatted.replace(
-                    new RegExp(`【${location}】`, 'g'),
-                    `<span class="highlight-location">【${location}】</span>`
-                );
-            }
-            
-            if (name) {
-                formatted = formatted.replace(
-                    new RegExp(`【${name}】`, 'g'),
-                    `<span class="highlight-name">【${name}】</span>`
-                );
-            }
-            
-            if (phone) {
-                formatted = formatted.replace(
-                    new RegExp(`【${phone}】`, 'g'),
-                    `<span class="highlight-phone">【${phone}】</span>`
-                );
-            }
+            // Highlight ALL text inside 【】brackets with link color
+            formatted = formatted.replace(
+                /【([^】]*)】/g,
+                `<span class="highlight-location">【$1】</span>`
+            );
             
             return formatted;
         }
@@ -308,25 +283,10 @@
                 const eventsHtml = eventsToDisplay.map((event, index) => {
                     const formatted = formatStatusWithHighlights(
                         event.status,
-                        event.name,
-                        event.location,
-                        event.phone
+                        event.location
                     );
 
                     let details = '';
-                    if (event.name || event.location || event.phone) {
-                        details = '<div class="event-details">';
-                        if (event.name) {
-                            details += `<div class="detail-item"><span class="detail-label">Người:</span> <span class="detail-value">${event.name}</span></div>`;
-                        }
-                        if (event.location) {
-                            details += `<div class="detail-item"><span class="detail-label">Địa điểm:</span> <span class="detail-value">${event.location}</span></div>`;
-                        }
-                        if (event.phone) {
-                            details += `<div class="detail-item"><span class="detail-label">SĐT:</span> <span class="detail-value">${event.phone}</span></div>`;
-                        }
-                        details += '</div>';
-                    }
 
                     return `
                         <div class="tracking-event">
