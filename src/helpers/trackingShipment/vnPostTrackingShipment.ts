@@ -187,7 +187,7 @@ export async function vnPostTrackingShipment(code?: string): Promise<{ status: s
   const url = `https://vietnampost.vn/vi`;
   console.log(`📍 [VN POST] Starting screenshot for URL: ${url}`);
   
-  const browserContext = await PlaywrightBrowserSingleton.getContextWithoutProxy();
+  const browserContext = await PlaywrightBrowserSingleton.getContextWithProxy();
   if (!browserContext) {
     throw new Error('Failed to get browser context');
   }
