@@ -10,13 +10,13 @@ async function navigateToPage(page: Page, url: string): Promise<void> {
   try {
     await page.goto(url, {
       waitUntil: 'domcontentloaded',
-      timeout: 10000
+      timeout: 5000
     });
   } catch (gotoError: any) {
     console.log(`⚠️ [VN POST SCREENSHOT] Navigation issue: ${gotoError.message}, retrying with 'load'...`);
     await page.goto(url, {
       waitUntil: 'load',
-      timeout: 10000
+      timeout: 5000
     });
   }
   console.log(`✅ [VN POST SCREENSHOT] Page loaded successfully`);
