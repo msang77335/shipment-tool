@@ -10,13 +10,13 @@ async function navigateToPage(page: Page, url: string): Promise<void> {
   try {
     await page.goto(url, {
       waitUntil: 'domcontentloaded',
-      timeout: 60000
+      timeout: 10000
     });
   } catch (gotoError: any) {
     console.log(`⚠️ [VN POST SCREENSHOT] Navigation issue: ${gotoError.message}, retrying with 'load'...`);
     await page.goto(url, {
       waitUntil: 'load',
-      timeout: 60000
+      timeout: 10000
     });
   }
   console.log(`✅ [VN POST SCREENSHOT] Page loaded successfully`);
@@ -192,7 +192,7 @@ export async function vnPostTrackingShipment(code?: string): Promise<{ status: s
     throw new Error('Failed to get browser context');
   }
 
-  const maxRetries = 3;
+  const maxRetries = 5;
   let lastError;
   let page;
 
