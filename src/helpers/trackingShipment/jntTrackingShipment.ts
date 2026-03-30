@@ -4,9 +4,10 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { env } from '../env';
+import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
 import { ProxyInfo, proxyManager } from '../proxyManager';
 import { aftershipTrackingShipment } from "./aftershipTrackingShipment";
-import { convertToStandardFormat, parseHtmlTrackingResponse } from './htmlTrackingParser'; import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
+import { convertToStandardFormat, parseHtmlTrackingResponse } from './htmlTrackingParser';
 const trackingUrl = "https://jtexpress.vn/vi/tracking";
 
 const headers = {
@@ -130,6 +131,7 @@ export const jntShipmentTrackingShipment = async (codes: string) => {
   if (trackingData.success) {
     const overallStatus = determineOverallStatus(trackingData?.data ?? []);
     const buffer = await renderShipmentHtml({ success: trackingData?.success, data: trackingData.data ?? [] });
+    console.log(`✅ [J&T TRACKING] Tracking completed for codes: ${codes}, Overall Status: ${overallStatus}, Image Size: ${buffer.length} bytes`);
     return {
       status: overallStatus,
       buffer: buffer
@@ -169,17 +171,12 @@ function determineOverallStatus(shipments: any[]): string {
 export const renderShipmentHtml = async (trackingData: { success: boolean; data: any[] }): Promise<Buffer> => {
   let page;
   try {
-    const templatePath = join(__dirname, '../../..', 'templates', 'shipment-list.html');
+    const templatePath = join(__dirname, '../../templates', 'shipment-list.html');
     let htmlTemplate = readFileSync(templatePath, 'utf-8');
 
     // Inject shipment data as JSON
     const shipmentJson = JSON.stringify(trackingData.success ? trackingData.data : []);
     htmlTemplate = htmlTemplate.replace('{DATA_PLACEHOLDER}', shipmentJson);
-
-    // Determine overall status based on last events
-    const shipmentsData = trackingData.success && trackingData.data ? trackingData.data : [];
-    const overallStatus = determineOverallStatus(shipmentsData);
-    console.log(`✅ [J&T] Overall status: ${overallStatus}`);
 
     // Get browser context and create page
     const browserContext = await PlaywrightBrowserSingleton.getContextWithoutProxy();
