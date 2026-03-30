@@ -26,6 +26,8 @@ services:
       - X_API_KEY=${X_API_KEY:-}
       # Proxy list for browser contexts
       - PROXY_LIST=${PROXY_LIST:-}
+      # Phone list
+      - JNT_PHONE_LIST=${JNT_PHONE_LIST:-}
 
 networks:
   automation-net:
