@@ -277,10 +277,10 @@
                 const events = shipment.history || [];
                 console.log(`Shipment ${shipmentIndex} (${shipment.trackingNumber}):`, { eventCount: events.length, isSingleShipment });
                 
-                // If single shipment, show all events; if multiple, show only last event
-                const eventsToDisplay = isSingleShipment ? events : (events.length > 0 ? events.slice(-1) : []);
+                // If single shipment, show all events; if multiple, show only first event
+                const eventsToDisplay = isSingleShipment ? events : events?.slice(0, 1);
                 
-                const eventsHtml = eventsToDisplay.map((event, index) => {
+                const eventsHtml = eventsToDisplay?.map((event, index) => {
                     const formatted = formatStatusWithHighlights(
                         event.status,
                         event.location
@@ -324,16 +324,6 @@
                         </div>
                         <div class="shipment-content">
                             ${contentHtml}
-                            <div class="summary">
-                                <span class="summary-label">Trạng thái hiện tại:</span>
-                                <span class="summary-value">${shipment.status || 'Đang xử lý'}</span>
-                            </div>
-                            ${shipment.lastUpdated ? `
-                                <div class="summary">
-                                    <span class="summary-label">Cập nhật lần cuối:</span>
-                                    <span class="summary-value">${shipment.lastUpdated}</span>
-                                </div>
-                            ` : ''}
                         </div>
                     </div>
                 `;
