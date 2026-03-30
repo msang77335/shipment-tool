@@ -4,9 +4,9 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { env } from '../env';
-import { ProxyInfo } from '../proxyManager';
+import { ProxyInfo, proxyManager } from '../proxyManager';
 import { aftershipTrackingShipment } from "./aftershipTrackingShipment";
-import { convertToStandardFormat, parseHtmlTrackingResponse } from './htmlTrackingParser';import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
+import { convertToStandardFormat, parseHtmlTrackingResponse } from './htmlTrackingParser'; import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
 const trackingUrl = "https://jtexpress.vn/vi/tracking";
 
 const headers = {
@@ -37,9 +37,10 @@ const axiosclient = axios.create({
 
 const trackingJnTPage = async (codes: string) => {
   const jntPhoneList = env.jntPhoneList ? env.jntPhoneList.split(',') : [];
+  const proxyList = proxyManager.getAllProxies() ?? [];
   try {
     const requests = jntPhoneList?.map(phone =>
-      processingTracking(phone.trim(), codes, env.proxies[Math.floor(Math.random() * env.proxies.length)])
+      processingTracking(phone.trim(), codes, proxyList[Math.floor(Math.random() * proxyList.length)])
     ) || [];
     const results = await Promise.all(requests);
 
@@ -77,20 +78,21 @@ const isHtmlResponse = (data: any): boolean => {
 };
 
 const processingTracking = async (cellPhone: string, codes: string, proxy: ProxyInfo) => {
+  const requestConfig: any = {
+    params: {
+      type: 'track',
+      billcode: codes,
+      cellphone: cellPhone,
+    },
+    timeout: 15000,
+    validateStatus: () => true,
+  };
   try {
-    const proxyUrl = `http://${proxy.username}:${proxy.password}@${proxy.server}`;
-    const requestConfig = {
-      params: {
-        type: 'track',
-        billcode: codes,
-        cellphone: cellPhone,
-        httpAgent: new HttpProxyAgent(proxyUrl),
-        httpsAgent: new HttpsProxyAgent(proxyUrl),
-      },
-      timeout: 15000,
-      validateStatus: () => true
-    };
-
+    if (proxy) {
+      const proxyUrl = `http://${proxy.username}:${proxy.password}@${proxy.server}`;
+      requestConfig.httpAgent = new HttpProxyAgent(proxyUrl);
+      requestConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+    }
     const response = await axiosclient.get(
       trackingUrl,
       requestConfig
@@ -136,10 +138,10 @@ function determineOverallStatus(shipments: any[]): string {
   const allDelivered = shipments.every(shipment => {
     const history = shipment.history || [];
     if (history.length === 0) return false;
-    
+
     const lastEvent = history[history.length - 1];
     const statusText = lastEvent?.status || '';
-    
+
     // Check if last event contains "ký nhận" (received/signed)
     return statusText.includes('ký nhận');
   });
@@ -174,7 +176,7 @@ export const renderShipmentHtml = async (codes: string): Promise<Buffer> => {
     }
 
     page = await browserContext.newPage();
-    
+
     // Load HTML content
     await page.setContent(htmlTemplate, { waitUntil: 'networkidle' });
 
@@ -188,7 +190,7 @@ export const renderShipmentHtml = async (codes: string): Promise<Buffer> => {
     });
 
     console.log(`✅ [J&T HTML RENDER] Screenshot rendered, size: ${screenshot.length} bytes`);
-    
+
     // Return with overall status
     return Buffer.from(screenshot);
   } catch (error) {
