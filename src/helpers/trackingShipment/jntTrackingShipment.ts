@@ -237,7 +237,6 @@ async function renderErrorPage(html: string): Promise<Buffer> {
     }
 
     page = await browserContext.newPage();
-    await page.setViewportSize({ width: 900, height: 600 });
     await page.setContent(html, { waitUntil: 'networkidle' });
 
     const screenshot = await page.screenshot({
