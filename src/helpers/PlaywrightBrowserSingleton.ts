@@ -14,6 +14,7 @@ export class PlaywrightBrowserSingleton {
   // Track active proxies with contexts and their creation order (for reuse rotation)
   private static activeProxiesWithContexts: Set<string> = new Set(); // proxies that currently have contexts
   private static proxyContextCreationOrder: string[] = []; // FIFO queue of proxies with contexts
+  private static proxyContextIndex: number = 0; // for round-robin context selection among proxies
   
   private static proxyIndex: number = 0; // for round-robin proxy selection
   private static currentProxyServer: string = ''; // Track which proxy is being used
@@ -152,13 +153,29 @@ export class PlaywrightBrowserSingleton {
     // Step 1: First, check if we have valid contexts to reuse (from previous creations)
     console.log(`📋 [CONTEXT CHECK-PROXY] Checking for existing valid contexts (active: ${this.activeProxiesWithContexts.size}/${this.MAX_CONCURRENT_PROXY_CONTEXTS})`);
     
-    // Try to find and reuse first valid context (in creation order)
-    for (const proxyKey of this.proxyContextCreationOrder) {
-      const context = this.contextPool.get(proxyKey);
-      if (context && this.isContextStillValid(context)) {
-        console.log(`♻️ [BROWSER-PROXY] Reusing existing context for proxy ${proxyKey}`);
-        console.log(`   Queue: [${this.proxyContextCreationOrder.join(', ')}]`);
-        return context;
+    // Try to find and reuse a valid context using round-robin rotation
+    if (this.proxyContextCreationOrder.length > 0) {
+      const startIndex = this.proxyContextIndex % this.proxyContextCreationOrder.length;
+      // Create array of rotated indices for round-robin iteration
+      const rotatedIndices = Array.from(
+        { length: this.proxyContextCreationOrder.length },
+        (_, i) => (startIndex + i) % this.proxyContextCreationOrder.length
+      );
+      
+      for (const currentIndex of rotatedIndices) {
+        const proxyKey = this.proxyContextCreationOrder[currentIndex];
+        const context = this.contextPool.get(proxyKey);
+        
+        if (context && this.isContextStillValid(context)) {
+          console.log(`♻️ [BROWSER-PROXY] Reusing existing context for proxy ${proxyKey}`);
+          console.log(`   Queue: [${this.proxyContextCreationOrder.join(', ')}]`);
+          
+          // Update index for next rotation
+          this.proxyContextIndex = (currentIndex + 1) % this.proxyContextCreationOrder.length;
+          console.log(`   Next context index will be: ${this.proxyContextIndex}`);
+          
+          return context;
+        }
       }
     }
 
