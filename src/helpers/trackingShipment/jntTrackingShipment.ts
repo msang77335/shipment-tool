@@ -172,7 +172,7 @@ function determineOverallStatus(shipments: any[]): string {
 export const renderShipmentHtml = async (trackingData: { success: boolean; data: any[] }): Promise<Buffer> => {
   let page;
   try {
-    const templatePath = join(__dirname, '../../../templates', 'jnt-tracking.html');
+    const templatePath = join(__dirname, '../../templates', 'jnt-tracking.html');
     let htmlTemplate = readFileSync(templatePath, 'utf-8');
 
     // Inject shipment data as JSON
