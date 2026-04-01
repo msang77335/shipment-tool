@@ -150,84 +150,67 @@ export class PlaywrightBrowserSingleton {
   }
 
   static async getContext(): Promise<BrowserContext | null> {
-    // Step 1: First, check if we have valid contexts to reuse (from previous creations)
-    console.log(`📋 [CONTEXT CHECK-PROXY] Checking for existing valid contexts (active: ${this.activeProxiesWithContexts.size}/${this.MAX_CONCURRENT_PROXY_CONTEXTS})`);
-    
-    // Try to find and reuse a valid context using round-robin rotation
+    console.log(`📋 [CONTEXT CHECK-PROXY] Checking contexts (active: ${this.activeProxiesWithContexts.size}/${this.MAX_CONCURRENT_PROXY_CONTEXTS})`);
+
+    // Step 1: If we haven't filled all context slots yet, create a new context with next proxy
+    if (this.activeProxiesWithContexts.size < this.MAX_CONCURRENT_PROXY_CONTEXTS) {
+      const { proxy, index, total } = this.getNextProxyWithIndex();
+      const proxyKey = proxy.server;
+
+      // Skip if this proxy already has a valid context
+      const existingContext = this.contextPool.get(proxyKey);
+      if (!existingContext || !this.isContextStillValid(existingContext)) {
+        const browser = await this.getOrCreateBrowserForProxy(proxy);
+        if (!browser) {
+          console.error('❌ [BROWSER CONTEXT] Cannot get context, browser instance is null');
+          return null;
+        }
+
+        console.log(`🆕 [BROWSER-PROXY] Creating NEW context assigned to proxy [${index + 1}/${total}]: ${proxyKey}...`);
+        const newContext = await browser.newContext({ viewport: { width: 1280, height: 1080 } });
+        console.log(`   ✅ Context instance created`);
+
+        newContext.on('close', () => {
+          console.log(`🔌 [BROWSER-PROXY] Browser context CLOSED EVENT for proxy ${proxyKey}`);
+          this.contextPool.set(proxyKey, undefined);
+          this.activeProxiesWithContexts.delete(proxyKey);
+          const idx = this.proxyContextCreationOrder.indexOf(proxyKey);
+          if (idx > -1) this.proxyContextCreationOrder.splice(idx, 1);
+        });
+
+        this.contextPool.set(proxyKey, newContext);
+        this.activeProxiesWithContexts.add(proxyKey);
+        this.proxyContextCreationOrder.push(proxyKey);
+
+        console.log(`✅ [BROWSER-PROXY] Context FIXED to proxy ${proxyKey}`);
+        console.log(`   Queue: [${this.proxyContextCreationOrder.join(', ')}]`);
+        return newContext;
+      }
+    }
+
+    // Step 2: All slots filled — round-robin through existing valid contexts
     if (this.proxyContextCreationOrder.length > 0) {
       const startIndex = this.proxyContextIndex % this.proxyContextCreationOrder.length;
-      // Create array of rotated indices for round-robin iteration
       const rotatedIndices = Array.from(
         { length: this.proxyContextCreationOrder.length },
         (_, i) => (startIndex + i) % this.proxyContextCreationOrder.length
       );
-      
+
       for (const currentIndex of rotatedIndices) {
         const proxyKey = this.proxyContextCreationOrder[currentIndex];
         const context = this.contextPool.get(proxyKey);
-        
+
         if (context && this.isContextStillValid(context)) {
           console.log(`♻️ [BROWSER-PROXY] Reusing existing context for proxy ${proxyKey}`);
-          console.log(`   Queue: [${this.proxyContextCreationOrder.join(', ')}]`);
-          
-          // Update index for next rotation
           this.proxyContextIndex = (currentIndex + 1) % this.proxyContextCreationOrder.length;
-          console.log(`   Next context index will be: ${this.proxyContextIndex}`);
-          
+          console.log(`   Queue: [${this.proxyContextCreationOrder.join(', ')}] → Next index: ${this.proxyContextIndex}`);
           return context;
         }
       }
     }
 
-    // Step 2: No valid existing contexts - we need to create a new one
-    // Now rotate to next proxy for new context creation
-    let { proxy, index, total } = this.getNextProxyWithIndex();
-    
-    // Get or create browser for this proxy
-    let browser = await this.getOrCreateBrowserForProxy(proxy);
-    if (!browser) {
-      console.error('❌ [BROWSER CONTEXT] Cannot get context, browser instance is null');
-      return null;
-    }
-
-    let proxyKey = proxy.server;
-    
-    // Check if we can create new context (max 2 proxies)
-    if (this.activeProxiesWithContexts.size < this.MAX_CONCURRENT_PROXY_CONTEXTS) {
-      // Can create new context for this proxy
-      console.log(`🆕 [BROWSER-PROXY] Creating NEW context assigned to proxy [${index + 1}/${total}]: ${proxyKey}...`);
-      const newContext = await browser.newContext({ viewport: { width: 1280, height: 1080 } });
-      console.log(`   ✅ Context instance created`);
-      
-      newContext.on('close', () => {
-        console.log(`🔌 [BROWSER-PROXY] Browser context CLOSED EVENT for proxy ${proxyKey}`);
-        this.contextPool.set(proxyKey, undefined);
-      });
-      
-      this.contextPool.set(proxyKey, newContext);
-      this.activeProxiesWithContexts.add(proxyKey);
-      this.proxyContextCreationOrder.push(proxyKey);
-      
-      console.log(`✅ [BROWSER-PROXY] Context FIXED to proxy ${proxyKey}`);
-      console.log(`   Queue: [${this.proxyContextCreationOrder.join(', ')}]`);
-      return newContext;
-    } else {
-      // Max contexts reached - all contexts are invalid and no new create allowed, return first valid one from queue
-      console.log(`⚠️ [BROWSER-PROXY] Max contexts (${this.MAX_CONCURRENT_PROXY_CONTEXTS}) reached, cannot create new proxy ${proxyKey}`);
-      console.log(`🔄 [BROWSER-PROXY] Looking for any valid context in existing queue...`);
-      
-      for (const checkProxyKey of this.proxyContextCreationOrder) {
-        const checkContext = this.contextPool.get(checkProxyKey);
-        if (checkContext && this.isContextStillValid(checkContext)) {
-          console.log(`✅ [BROWSER-PROXY] Found and reusing valid context for proxy: ${checkProxyKey}`);
-          console.log(`   Queue: [${this.proxyContextCreationOrder.join(', ')}]`);
-          return checkContext;
-        }
-      }
-      
-      console.log(`❌ [BROWSER-PROXY] No valid contexts available in queue`);
-      return null;
-    }
+    console.log(`❌ [BROWSER-PROXY] No valid contexts available`);
+    return null;
   }
 
   /**
