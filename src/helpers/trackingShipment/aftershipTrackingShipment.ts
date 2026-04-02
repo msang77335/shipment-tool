@@ -230,17 +230,9 @@ async function retryScreenshotCapture({ codes, provider, maxRetries }: { codes: 
 
       // No data found - check if it's due to quota/blocking issue
       const hasBlockingIssue = await checkForQuotaOrBlockingIssues(page);
-      
       if (hasBlockingIssue) {
         console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected - closing context and will retry with new context`);
         const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
-        // Add to blacklist
-        proxyManager.addToBlacklist({
-          provider,
-          proxyServer: currentProxyServer,
-          reason: 'QUOTA_EXCEEDED',
-          code: codes
-        });
         if (currentProxyServer) {
           await PlaywrightBrowserSingleton.closeContextForProxy(currentProxyServer);
           console.log(`✅ [AFTERSHIP] Context closed for proxy ${currentProxyServer}`);

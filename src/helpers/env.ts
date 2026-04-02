@@ -38,6 +38,8 @@ export interface EnvConfig {
 
   // Proxy Services
   proxies: ProxyConfig[];
+  webshareApiKey?: string;
+  webshareProxyMode: string;
 
   // Shopee session cookies (JSON array of Playwright Cookie objects)
   shopeeCookies?: string;
@@ -136,6 +138,8 @@ export function getEnv(): EnvConfig {
 
     // Proxy Services
     proxies: parseProxies(),
+    webshareApiKey: process.env.WEBSHARE_API_KEY || undefined,
+    webshareProxyMode: process.env.WEBSHARE_PROXY_MODE || 'direct',
 
     // Shopee session cookies
     shopeeCookies: process.env.SHOPEE_SESSION_COOKIES || undefined,

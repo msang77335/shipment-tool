@@ -2,10 +2,30 @@
  * Proxy Manager - Manages proxy pool dynamically with integrated blacklist tracking
  * Supports: add proxy, remove proxy, remove proxies by blacklist
  * Tracks blocking issues (quota exceeded, IP blocks, etc.)
+ * Supports loading proxies from Webshare API (with full pagination)
  */
 
 import { env } from './env';
 import { PlaywrightBrowserSingleton } from './PlaywrightBrowserSingleton';
+
+// ---------------------------------------------------------------------------
+// Webshare API types
+// ---------------------------------------------------------------------------
+interface WebshareProxy {
+  id: string;
+  username: string;
+  password: string;
+  proxy_address: string;
+  port: number;
+  valid: boolean;
+}
+
+interface WebshareListResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: WebshareProxy[];
+}
 
 export interface ProxyInfo {
   server: string;
@@ -334,6 +354,171 @@ class ProxyManager {
   }
 
   /**
+   * Replace proxies in the pool by calling Webshare API and reloading the proxy list
+   * This method handles IP addresses that need replacement and fetches new proxies
+   *
+   * @param ipAddresses - Array of IP addresses to replace
+   * @param replaceCount - Number of new proxies to get (default: 2)
+   * @param dryRun - If true, performs a dry run without actual replacement (default: false)
+   * @returns Success status, removed proxies, and reloaded proxies count
+   */
+  async replaceProxiesAndReload(
+    ipAddresses: string[],
+    dryRun: boolean = false
+  ): Promise<{
+    success: boolean;
+    message: string;
+    webshareResponse?: Record<string, unknown>;
+    removedProxies: ProxyInfo[];
+    newProxies: ProxyInfo[];
+    reloadedCount: number;
+    totalProxies: number;
+    error?: string;
+  }> {
+    if (!ipAddresses || ipAddresses.length === 0) {
+      return {
+        success: false,
+        message: 'No IP addresses provided for replacement',
+        removedProxies: [],
+        newProxies: [],
+        reloadedCount: 0,
+        totalProxies: this.proxies.length,
+        error: 'Empty IP list'
+      };
+    }
+
+    const replaceCount = ipAddresses.length; // Replace one proxy per IP address
+    // Step 1: Call Webshare API to replace proxies
+    const webshareResult = await this.replaceProxies(ipAddresses, replaceCount, dryRun);
+
+    if (!webshareResult.success) {
+      return {
+        success: false,
+        message: `Webshare API replacement failed: ${webshareResult.message}`,
+        removedProxies: [],
+        newProxies: [],
+        reloadedCount: 0,
+        totalProxies: this.proxies.length,
+        error: webshareResult.error
+      };
+    }
+
+    // Step 2: Remove proxies that have these IP addresses from local pool
+    const removedProxies: ProxyInfo[] = [];
+
+    // Extract IP addresses from proxy servers (e.g., "http://1.2.3.4:8080" -> "1.2.3.4")
+    for (const ip of ipAddresses) {
+      const index = this.proxies.findIndex(p => p.server.includes(ip));
+      if (index !== -1) {
+        const removed = this.proxies[index];
+        removedProxies.push(removed);
+
+        // Close browser contexts for this proxy
+        console.log(`🔌 [PROXY MANAGER] Closing browser instances for IP: ${ip}`);
+        await PlaywrightBrowserSingleton.closeContextForProxy(removed.server);
+
+        // Remove from list
+        this.proxies.splice(index, 1);
+        console.log(`✅ [PROXY MANAGER] Removed proxy with IP: ${ip}`);
+      }
+    }
+
+    // Step 3: Reload proxies from Webshare (only if not a dry run)
+    let newProxies: ProxyInfo[] = [];
+    let reloadedCount = 0;
+    if (!dryRun) {
+      const proxiesBeforeReload = this.proxies.length;
+      const loadResult = await this.loadFromWebshare();
+      reloadedCount = loadResult.loaded;
+      
+      // Capture newly added proxies
+      newProxies = this.proxies.slice(proxiesBeforeReload);
+      
+      console.log(`🔄 [PROXY MANAGER] Reloaded ${reloadedCount} new proxies from Webshare`);
+    }
+
+    return {
+      success: true,
+      message: `Successfully replaced ${ipAddresses.length} proxies via Webshare API${dryRun ? ' (dry run)' : ''}`,
+      webshareResponse: webshareResult.response,
+      removedProxies,
+      newProxies,
+      reloadedCount,
+      totalProxies: this.proxies.length
+    };
+  }
+
+  /**
+   * Replace a proxy in the pool (remove old, add new)
+   * Removes a proxy by server address and adds a new one
+   * Closes browser contexts for the removed proxy
+   */
+  async replaceProxy(
+    oldProxyServer: string,
+    newProxyInfo: ProxyInfo
+  ): Promise<{
+    success: boolean;
+    message: string;
+    removed?: ProxyInfo;
+    added?: ProxyInfo;
+    totalProxies: number;
+  }> {
+    // Find and remove old proxy
+    const index = this.proxies.findIndex(p => p.server === oldProxyServer);
+    if (index === -1) {
+      return {
+        success: false,
+        message: `Proxy ${oldProxyServer} not found`,
+        totalProxies: this.proxies.length
+      };
+    }
+
+    const removedProxy = this.proxies[index];
+
+    // Close browser contexts for old proxy
+    console.log(`🔌 [PROXY MANAGER] Closing browser instances for proxy: ${oldProxyServer}`);
+    await PlaywrightBrowserSingleton.closeContextForProxy(oldProxyServer);
+
+    // Remove from list
+    this.proxies.splice(index, 1);
+    console.log(`✅ [PROXY MANAGER] Removed proxy: ${oldProxyServer}`);
+
+    // Add new proxy
+    if (!newProxyInfo.server) {
+      return {
+        success: false,
+        message: 'New proxy server URL is required',
+        removed: removedProxy,
+        totalProxies: this.proxies.length
+      };
+    }
+
+    // Check if new proxy already exists
+    const exists = this.proxies.some(p => p.server === newProxyInfo.server);
+    if (exists) {
+      return {
+        success: false,
+        message: `New proxy ${newProxyInfo.server} already exists`,
+        removed: removedProxy,
+        totalProxies: this.proxies.length
+      };
+    }
+
+    // Add new proxy
+    this.proxies.push(newProxyInfo);
+    const auth = newProxyInfo.username ? ` (${newProxyInfo.username})` : '';
+    console.log(`✅ [PROXY MANAGER] Added proxy: ${newProxyInfo.server}${auth}`);
+
+    return {
+      success: true,
+      message: `Proxy replaced: ${oldProxyServer} → ${newProxyInfo.server}`,
+      removed: removedProxy,
+      added: newProxyInfo,
+      totalProxies: this.proxies.length
+    };
+  }
+
+  /**
    * Get proxy by server URL
    */
   getProxyByServer(proxyServer: string): ProxyInfo | undefined {
@@ -475,6 +660,194 @@ class ProxyManager {
    */
   private getGrayListKey(provider: string, proxyServer?: string): string {
     return proxyServer ? `${provider}:${proxyServer}` : provider;
+  }
+
+  // -------------------------------------------------------------------------
+  // Webshare API integration
+  // -------------------------------------------------------------------------
+
+  /**
+   * Fetch all proxies from the Webshare API (handles pagination automatically).
+   * Replaces the entire proxy pool with the fetched list.
+   * Only proxies with `valid: true` are loaded.
+   *
+   * Environment variables:
+   *   WEBSHARE_API_KEY   – Bearer token for Webshare API (required)
+   *   WEBSHARE_PROXY_MODE – `direct` | `backbone` etc. (default: "direct")
+   */
+  async loadFromWebshare(): Promise<{ loaded: number; skipped: number }> {
+    const apiKey = env.webshareApiKey;
+    if (!apiKey) {
+      console.warn('⚠️  [WEBSHARE] WEBSHARE_API_KEY is not set – skipping load');
+      return { loaded: 0, skipped: 0 };
+    }
+
+    const mode = env.webshareProxyMode;
+    const pageSize = 100;
+    let page = 1;
+    let totalLoaded = 0;
+    let totalSkipped = 0;
+    const fetched: ProxyInfo[] = [];
+
+    console.log(`🌐 [WEBSHARE] Fetching proxy list (mode=${mode}) …`);
+
+    // biome-ignore lint/suspicious/noConstantCondition: pagination loop
+    while (true) {
+      const url = `https://proxy.webshare.io/api/v2/proxy/list/?mode=${encodeURIComponent(mode)}&page=${page}&page_size=${pageSize}`;
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: { Authorization: `Token ${apiKey}` },
+        });
+      } catch (err) {
+        console.error(`❌ [WEBSHARE] Network error on page ${page}:`, err);
+        break;
+      }
+
+      if (!response.ok) {
+        console.error(
+          `❌ [WEBSHARE] API returned HTTP ${response.status} on page ${page}`
+        );
+        break;
+      }
+
+      const data = await response.json() as WebshareListResponse;
+
+      for (const p of data.results) {
+        if (!p.valid) {
+          totalSkipped++;
+          continue;
+        }
+        fetched.push({
+          server: `http://${p.proxy_address}:${p.port}`,
+          username: p.username,
+          password: p.password,
+        });
+        totalLoaded++;
+      }
+
+      console.log(
+        `   [WEBSHARE] Page ${page}: ${data.results.length} entries, ${data.results.filter(r => r.valid).length} valid`
+      );
+
+      if (!data.next) break;
+      page++;
+    }
+
+    // Replace pool atomically
+    this.proxies = fetched;
+    console.log(
+      `✅ [WEBSHARE] Loaded ${totalLoaded} proxies (${totalSkipped} invalid/skipped). Pool size: ${this.proxies.length}`
+    );
+
+    return { loaded: totalLoaded, skipped: totalSkipped };
+  }
+
+  /**
+   * Initialize Webshare proxies on startup if WEBSHARE_API_KEY is configured.
+   * Falls back to the static PROXY_LIST if the API key is absent.
+   */
+  async initializeWebshare(): Promise<void> {
+    if (!env.webshareApiKey) return;
+    await this.loadFromWebshare();
+  }
+
+  /**
+   * Replace proxies in Webshare API by IP addresses
+   *
+   * @param ipAddresses - Array of IP addresses to replace
+   * @param replaceCount - Number of proxies to replace with (default: 2)
+   * @param dryRun - If true, performs a dry run without actual replacement (default: false)
+   * @returns Success status and API response
+   */
+  async replaceProxies(
+    ipAddresses: string[],
+    replaceCount: number = 2,
+    dryRun: boolean = false
+  ): Promise<{
+    success: boolean;
+    message: string;
+    response?: Record<string, unknown>;
+    error?: string;
+  }> {
+    const apiKey = env.webshareApiKey;
+    if (!apiKey) {
+      return {
+        success: false,
+        message: 'WEBSHARE_API_KEY is not configured',
+        error: 'Missing API key'
+      };
+    }
+
+    if (!ipAddresses || ipAddresses.length === 0) {
+      return {
+        success: false,
+        message: 'No IP addresses provided for replacement',
+        error: 'Empty IP list'
+      };
+    }
+
+    const url = 'https://proxy.webshare.io/api/v2/proxy/replace/';
+    const payload = {
+      to_replace: {
+        type: 'ip_address',
+        ip_addresses: ipAddresses
+      },
+      replace_with: [
+        {
+          type: 'any',
+          count: replaceCount
+        }
+      ],
+      dry_run: dryRun
+    };
+
+    try {
+      console.log(
+        `🔄 [WEBSHARE] Replacing ${ipAddresses.length} proxies (dry_run: ${dryRun}) …`
+      );
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const responseData = await response.json() as Record<string, unknown>;
+
+      if (!response.ok) {
+        console.error(
+          `❌ [WEBSHARE] Proxy replacement failed with HTTP ${response.status}`
+        );
+        return {
+          success: false,
+          message: `Proxy replacement failed with status ${response.status}`,
+          error: JSON.stringify(responseData),
+          response: responseData
+        };
+      }
+
+      console.log(`✅ [WEBSHARE] Proxy replacement ${dryRun ? '(dry run) ' : ''}completed successfully`);
+      console.log(`   Response:`, JSON.stringify(responseData, null, 2));
+
+      return {
+        success: true,
+        message: `Successfully replaced ${ipAddresses.length} proxies`,
+        response: responseData
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error(`❌ [WEBSHARE] Proxy replacement error:`, err);
+      return {
+        success: false,
+        message: 'Proxy replacement request failed',
+        error: errorMessage
+      };
+    }
   }
 }
 

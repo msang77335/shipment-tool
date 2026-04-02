@@ -84,7 +84,7 @@ async function getTrackingData(code?: string): Promise<any> {
       }
 
       const result = await response.json();
-      console.log(`✅ [VIETTEL POST] API result:`, result);
+      console.log(`✅ [VIETTEL POST] Call successful`);
       return result;
     } catch (error: any) {
       lastError = error;
