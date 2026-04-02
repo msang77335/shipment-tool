@@ -61,7 +61,7 @@ export function isVnPost(providerStr: string) {
 
 export function isYunExpress(providerStr: string) {
   const upperStr = providerStr.toUpperCase();
-  return upperStr.includes('YUN');
+  return upperStr.includes('YUN') || upperStr.includes('YUNEXPRESS') || upperStr.includes('YUN EXPRESS');
 }
 
 export function isYW(providerStr: string) {

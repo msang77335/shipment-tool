@@ -166,7 +166,7 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
   const hasBlockingIssue = await checkForQuotaOrBlockingIssues(page);
   if (hasBlockingIssue) {
     console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected on page`);
-    // Add to blacklist
+    // Add to blacklist and remove from proxy pool
     const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
     proxyManager.addToBlacklist({
       provider,
@@ -174,6 +174,12 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
       reason: 'QUOTA_EXCEEDED',
       code: codes
     });
+    
+    // Remove proxy from pool immediately
+    if (currentProxyServer) {
+      await proxyManager.removeProxy(currentProxyServer);
+      console.log(`✅ [AFTERSHIP] Removed proxy ${currentProxyServer} from pool due to QUOTA_EXCEEDED`);
+    }
     return null; // Signal retry with context close
   }
 
@@ -200,6 +206,61 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
   return null;
 }
 
+async function handleBlockingIssue(page: Page): Promise<void> {
+  console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected - closing context and will retry with new context`);
+  const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
+  if (currentProxyServer) {
+    await PlaywrightBrowserSingleton.closeContextForProxy(currentProxyServer);
+    console.log(`✅ [AFTERSHIP] Context closed for proxy ${currentProxyServer}`);
+  }
+}
+
+async function cleanupContextOnError(browserContext: any): Promise<void> {
+  if (browserContext) {
+    try {
+      const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
+      if (currentProxyServer) {
+        await PlaywrightBrowserSingleton.closeContextForProxy(currentProxyServer);
+      }
+    } catch (closeError) {
+      console.error(`⚠️ [AFTERSHIP] Failed to close context on error:`, closeError);
+    }
+  }
+}
+
+async function setupPageWithContext(attempt: number, maxRetries: number): Promise<{ browserContext: any; page: Page }> {
+  console.log(`🆕 [AFTERSHIP] Getting browser context (attempt ${attempt}/${maxRetries})...`);
+  const browserContext = await PlaywrightBrowserSingleton.getContextWithProxy();
+  if (!browserContext) {
+    throw new Error('Failed to get browser context');
+  }
+
+  console.log(`🆕 [AFTERSHIP] Creating new page (attempt ${attempt}/${maxRetries})...`);
+  const page = await createPage(browserContext);
+
+  await applyStealthPatches(page);
+  await setStealthHeaders(page);
+
+  return { browserContext, page };
+}
+
+async function handleNoDataResult(page: Page, attempt: number, maxRetries: number): Promise<{ buffer: Buffer; status: string } | null> {
+  const hasBlockingIssue = await checkForQuotaOrBlockingIssues(page);
+  if (hasBlockingIssue) {
+    await handleBlockingIssue(page);
+  }
+
+  if (attempt < maxRetries) {
+    await closePage(page);
+    console.log(`⏳ [AFTERSHIP] No data found, waiting before retry ${attempt}/${maxRetries}...`);
+    await waitBeforeRetry(attempt);
+    return null;
+  }
+
+  console.log(`⚠️ [AFTERSHIP] Last attempt - capturing screenshot anyway`);
+  return await captureLastAttemptScreenshot(page);
+}
+
 async function retryScreenshotCapture({ codes, provider, maxRetries }: { codes: string; provider: string; maxRetries: number; }): Promise<{ buffer: Buffer; status: string }> {
   let lastError;
 
@@ -208,17 +269,9 @@ async function retryScreenshotCapture({ codes, provider, maxRetries }: { codes: 
     let browserContext: any = null;
 
     try {
-      console.log(`🆕 [AFTERSHIP] Getting browser context (attempt ${attempt}/${maxRetries})...`);
-      browserContext = await PlaywrightBrowserSingleton.getContextWithProxy();
-      if (!browserContext) {
-        throw new Error('Failed to get browser context');
-      }
-
-      console.log(`🆕 [AFTERSHIP] Creating new page (attempt ${attempt}/${maxRetries})...`);
-      page = await createPage(browserContext);
-
-      await applyStealthPatches(page);
-      await setStealthHeaders(page);
+      const setup = await setupPageWithContext(attempt, maxRetries);
+      page = setup.page;
+      browserContext = setup.browserContext;
 
       const result = await attemptScreenshot({ page, codes, provider, attempt, maxRetries });
 
@@ -228,41 +281,15 @@ async function retryScreenshotCapture({ codes, provider, maxRetries }: { codes: 
         return result;
       }
 
-      // No data found - check if it's due to quota/blocking issue
-      const hasBlockingIssue = await checkForQuotaOrBlockingIssues(page);
-      if (hasBlockingIssue) {
-        console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected - closing context and will retry with new context`);
-        const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
-        if (currentProxyServer) {
-          await PlaywrightBrowserSingleton.closeContextForProxy(currentProxyServer);
-          console.log(`✅ [AFTERSHIP] Context closed for proxy ${currentProxyServer}`);
-        }
-      }
-
-      if (attempt < maxRetries) {
-        await closePage(page);
-        console.log(`⏳ [AFTERSHIP] No data found, waiting before retry ${attempt}/${maxRetries}...`);
-        await waitBeforeRetry(attempt);
-      } else {
-        console.log(`⚠️ [AFTERSHIP] Last attempt - capturing screenshot anyway`);
-        return await captureLastAttemptScreenshot(page);
+      const noDataResult = await handleNoDataResult(page, attempt, maxRetries);
+      if (noDataResult) {
+        return noDataResult;
       }
     } catch (error: any) {
       lastError = error;
       console.error(`💥 [AFTERSHIP] Attempt ${attempt}/${maxRetries} failed:`, error.message);
       
-      // Try to close context on error
-      if (browserContext) {
-        try {
-          const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
-          if (currentProxyServer) {
-            await PlaywrightBrowserSingleton.closeContextForProxy(currentProxyServer);
-          }
-        } catch (closeError) {
-          console.error(`⚠️ [AFTERSHIP] Failed to close context on error:`, closeError);
-        }
-      }
-
+      await cleanupContextOnError(browserContext);
       await closePage(page);
       
       if (attempt < maxRetries) {
