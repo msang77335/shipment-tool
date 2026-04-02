@@ -28,7 +28,8 @@ services:
       - PROXY_LIST=${PROXY_LIST:-}
       # Phone list
       - JNT_PHONE_LIST=${JNT_PHONE_LIST:-}
-
+      # Webshare API key for proxy management
+      - WEBSHARE_API_KEY=${WEBSHARE_API_KEY:-}
 networks:
   automation-net:
     driver: bridge
