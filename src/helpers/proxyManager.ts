@@ -7,6 +7,8 @@
 
 import { env } from './env';
 import { PlaywrightBrowserSingleton } from './PlaywrightBrowserSingleton';
+import { applyStealthPatches, setStealthHeaders } from './index';
+const { firefox } = require('playwright-extra');
 
 // ---------------------------------------------------------------------------
 // Webshare API types
@@ -849,6 +851,64 @@ class ProxyManager {
       };
     }
   }
+}
+
+// =============================================================================
+// CHECK QUOTA - HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Launch Firefox browser with specified proxy configuration
+ */
+export async function launchBrowserWithProxy(proxyConfig: any): Promise<any> {
+  console.log(`🌍 [CHECK-QUOTA] Launching browser with proxy ${proxyConfig.server}`);
+  return await firefox.launch({
+    headless: false,
+    args: ['--no-sandbox'],
+    proxy: proxyConfig
+  });
+}
+
+/**
+ * Setup browser context, create page, and navigate to Aftership
+ */
+export async function setupPageAndNavigate(browser: any): Promise<{ context: any; page: any }> {
+  console.log(`📋 [CHECK-QUOTA] Creating browser context`);
+  const context = await browser.newContext({ viewport: { width: 1280, height: 1080 } });
+
+  console.log(`📄 [CHECK-QUOTA] Creating page`);
+  const page = await context.newPage();
+  page.setDefaultTimeout(120000);
+
+  await applyStealthPatches(page);
+  await setStealthHeaders(page);
+
+  console.log(`🌐 [CHECK-QUOTA] Navigating to aftership.com`);
+  await page.goto('https://www.aftership.com/track?c=jtexpress-vn&t=859882419163,859886765769,859887559163,859884882564,859881603267', {
+    waitUntil: 'networkidle',
+    timeout: 60000
+  });
+
+  console.log(`⏳ [CHECK-QUOTA] Waiting for page to settle`);
+  await page.waitForTimeout(3000);
+
+  return { context, page };
+}
+
+/**
+ * Cleanup browser resources
+ */
+export async function cleanupBrowserResources(browser: any, context: any, page: any): Promise<void> {
+  if (page && !page.isClosed()) {
+    await page.close().catch((e: any) => console.log('Error closing page:', e));
+  }
+  if (context) {
+    await context.close().catch((e: any) => console.log('Error closing context:', e));
+  }
+  if (browser?.isConnected?.()) {
+    await browser.close().catch((e: any) => console.log('Error closing browser:', e));
+  }
+  console.log(`🔌 [CHECK-QUOTA] Cleanup completed`);
 }
 
 // Singleton instance

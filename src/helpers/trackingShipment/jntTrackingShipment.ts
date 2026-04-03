@@ -48,19 +48,29 @@ const trackingJnTPage = async (codes: string) => {
 
     const flattenedResults = results.flat();
 
+    // Remove duplicate tracking numbers (keep first occurrence)
+    const seenTrackingNumbers = new Set<string>();
+    const dedupedResults = flattenedResults.filter(result => {
+      if (seenTrackingNumbers.has(result.trackingNumber)) {
+        return false;
+      }
+      seenTrackingNumbers.add(result.trackingNumber);
+      return true;
+    });
+
     const codeLength = codes.split(',').length;
 
-    if (flattenedResults?.length < codeLength) {
+    if (dedupedResults?.length < codeLength) {
       return {
         success: false,
         data: null,
-        error: `Tracking information found for ${flattenedResults.length} out of ${codeLength} tracking number(s)`
+        error: `Tracking information found for ${dedupedResults.length} out of ${codeLength} tracking number(s)`
       };
     }
 
     return {
       success: true,
-      data: flattenedResults,
+      data: dedupedResults,
     };
   } catch (error) {
     console.error(`Error tracking J&T shipment ${codes}:`, error);

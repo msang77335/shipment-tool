@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { proxyManager, ProxyInfo } from '../helpers/proxyManager';
+import { proxyManager, ProxyInfo, launchBrowserWithProxy, setupPageAndNavigate, cleanupBrowserResources } from '../helpers/proxyManager';
 
 const router = Router();
 
@@ -563,6 +563,85 @@ router.post('/replace-proxies', async (req: Request, res: Response): Promise<voi
       success: false,
       error: 'Failed to replace proxies'
     });
+  }
+});
+
+// =============================================================================
+// CHECK QUOTA
+// =============================================================================
+
+/**
+ * POST /api/v1/proxy/check-quota
+ * Check proxy quota by navigating to Aftership page and taking screenshot
+ * Body: {
+ *   server: string,             // Required: Proxy server address (e.g., 104.249.29.190:5883)
+ *   username?: string,          // Optional: Proxy username
+ *   password?: string,          // Optional: Proxy password
+ *   bypass?: string             // Optional: Proxy bypass
+ * }
+ */
+router.post('/check-quota', async (req: Request, res: Response): Promise<void> => {
+  let browser: any = null;
+  let context: any = null;
+  let page: any = null;
+
+  try {
+    const { server, username, password, bypass } = req.body;
+
+    if (!server) {
+      res.status(400).json({
+        success: false,
+        error: 'Proxy server is required'
+      });
+      return;
+    }
+
+    console.log(`🔍 [CHECK-QUOTA] Starting quota check for proxy ${server}`);
+
+    const proxyConfig: any = {
+      server,
+      ...(username && { username }),
+      ...(password && { password }),
+      ...(bypass && { bypass })
+    };
+
+    browser = await launchBrowserWithProxy(proxyConfig);
+    const { context: ctx, page: pg } = await setupPageAndNavigate(browser);
+    context = ctx;
+    page = pg;
+
+    console.log(`📸 [CHECK-QUOTA] Taking screenshot`);
+    const screenshot = await page.screenshot({ fullPage: false, clip: { x: 0, y: 0, width: 1280, height: 1080 } });
+
+    const pageText = await page.evaluate(() => (globalThis as any).document.body.innerText || '');
+    const hasQuotaExceeded = pageText.includes('Quota Exceeded');
+
+    console.log(`✅ [CHECK-QUOTA] Screenshot captured successfully`);
+
+    res.type('image/png');
+    res.set('X-Proxy-Server', server);
+    res.set('X-Quota-Exceeded', hasQuotaExceeded.toString());
+    res.send(Buffer.from(screenshot));
+  } catch (error: any) {
+    console.error('❌ [CHECK-QUOTA] Error checking quota:', error);
+    
+    let errorScreenshot = null;
+    if (page?.isClosed?.() === false) {
+      try {
+        errorScreenshot = await page.screenshot({ fullPage: false, clip: { x: 0, y: 0, width: 1280, height: 1080 } });
+      } catch (screenshotError) {
+        console.error('❌ [CHECK-QUOTA] Error capturing screenshot:', screenshotError);
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check quota',
+      details: error.message,
+      screenshot: errorScreenshot ? Buffer.from(errorScreenshot).toString('base64') : null
+    });
+  } finally {
+    await cleanupBrowserResources(browser, context, page);
   }
 });
 
