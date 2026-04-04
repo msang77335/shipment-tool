@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { proxyManager, ProxyInfo, launchBrowserWithProxy, setupPageAndNavigate, cleanupBrowserResources } from '../helpers/proxyManager';
+import { ProxyInfo, cleanupBrowserResources, launchBrowserWithProxy, proxyManager, setupPageAndNavigate } from '../helpers/proxy/proxyManager';
 
 const router = Router();
 
@@ -33,27 +33,6 @@ router.get('/', (req: Request, res: Response): void => {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve proxies'
-    });
-  }
-});
-
-/**
- * GET /api/v1/proxy/stats
- * Get proxy statistics
- */
-router.get('/stats', (req: Request, res: Response): void => {
-  try {
-    const stats = proxyManager.getProxyStats();
-
-    res.json({
-      success: true,
-      data: stats
-    });
-  } catch (error: any) {
-    console.error('❌ [PROXY] Error getting stats:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve proxy statistics'
     });
   }
 });
@@ -117,45 +96,6 @@ router.post('/', (req: Request, res: Response): void => {
     res.status(500).json({
       success: false,
       error: 'Failed to add proxy'
-    });
-  }
-});
-
-/**
- * PUT /api/v1/proxy/:proxyServer
- * Update a proxy
- * URL param: proxyServer (URL encoded proxy server address)
- * Body: { username?: string, password?: string, bypass?: string }
- */
-router.put('/:proxyServer', (req: Request, res: Response): void => {
-  try {
-    const proxyServer = decodeURIComponent(req.params.proxyServer as string);
-    const updates = req.body;
-
-    const result = proxyManager.updateProxy(proxyServer, updates);
-
-    if (result.success) {
-      res.json({
-        success: true,
-        message: result.message,
-        proxy: {
-          server: result.proxy?.server,
-          username: result.proxy?.username || 'N/A',
-          password: result.proxy?.password ? '***' : 'N/A',
-          bypass: result.proxy?.bypass || 'N/A'
-        }
-      });
-    } else {
-      res.status(404).json({
-        success: false,
-        error: result.message
-      });
-    }
-  } catch (error: any) {
-    console.error('❌ [PROXY] Error updating proxy:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update proxy'
     });
   }
 });
@@ -244,8 +184,7 @@ router.get('/blacklist', (req: Request, res: Response): void => {
           inProxyPool: entry.proxyServer ? proxyManager.proxyExists(entry.proxyServer) : false,
           reason: entry.reason,
           timestamp: new Date(entry.timestamp).toISOString(),
-          code: entry.code || 'N/A',
-          ...(entry.reason !== 'QUOTA_EXCEEDED' && { expiresIn: entry.expiresIn })
+          code: entry.code || 'N/A'
         }))
       }
     });
@@ -254,75 +193,6 @@ router.get('/blacklist', (req: Request, res: Response): void => {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve blacklist'
-    });
-  }
-});
-
-/**
- * GET /api/v1/proxy/blacklist/stats
- * Get statistics about blacklist entries
- */
-router.get('/blacklist/stats', (req: Request, res: Response): void => {
-  try {
-    const stats = proxyManager.getBlacklistStats();
-
-    res.json({
-      success: true,
-      data: {
-        totalEntries: stats.totalEntries,
-        byReason: stats.byReason,
-        byProvider: stats.byProvider
-      }
-    });
-  } catch (error: any) {
-    console.error('❌ [BLACKLIST] Error getting stats:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve statistics'
-    });
-  }
-});
-
-/**
- * GET /api/v1/proxy/blacklist/check
- * Check if a specific provider/proxy is blacklisted
- * Query: { provider: string, proxyServer?: string }
- */
-router.get('/blacklist/check', (req: Request, res: Response): void => {
-  try {
-    const { provider, proxyServer } = req.query;
-
-    if (!provider) {
-      res.status(400).json({
-        success: false,
-        error: 'Provider query parameter is required'
-      });
-      return;
-    }
-
-    const { isBlacklisted, entry } = proxyManager.isBlacklisted(
-      provider as string,
-      proxyServer as string | undefined
-    );
-
-    res.json({
-      success: true,
-      data: {
-        provider,
-        proxyServer: proxyServer || null,
-        isBlacklisted,
-        ...(isBlacklisted && entry && {
-          reason: entry.reason,
-          timestamp: new Date(entry.timestamp).toISOString(),
-          code: entry.code
-        })
-      }
-    });
-  } catch (error: any) {
-    console.error('❌ [BLACKLIST] Error checking blacklist:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to check blacklist'
     });
   }
 });
@@ -378,121 +248,6 @@ router.post('/blacklist/clear', (req: Request, res: Response): void => {
     res.status(500).json({
       success: false,
       error: 'Failed to clear blacklist'
-    });
-  }
-});
-
-// =============================================================================
-// GRAYLIST
-// =============================================================================
-
-/**
- * GET /api/v1/proxy/graylist
- * Get all current gray list entries (proxies without tracking data)
- */
-router.get('/graylist', (req: Request, res: Response): void => {
-  try {
-    const graylist = proxyManager.getGrayList();
-
-    res.json({
-      success: true,
-      data: {
-        totalEntries: graylist.length,
-        entries: graylist.map(entry => ({
-          provider: entry.provider,
-          proxyServer: entry.proxyServer || 'N/A',
-          tries: entry.tries,
-          reason: entry.reason,
-          lastAttempt: new Date(entry.lastAttempt).toISOString()
-        }))
-      }
-    });
-  } catch (error: any) {
-    console.error('❌ [GRAYLIST] Error retrieving graylist:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve gray list'
-    });
-  }
-});
-
-/**
- * GET /api/v1/proxy/graylist/stats
- * Get statistics about gray list entries
- */
-router.get('/graylist/stats', (req: Request, res: Response): void => {
-  try {
-    const stats = proxyManager.getGrayListStats();
-
-    res.json({
-      success: true,
-      data: {
-        totalEntries: stats.totalEntries,
-        byProvider: stats.byProvider,
-        highestTries: stats.highestTries
-      }
-    });
-  } catch (error: any) {
-    console.error('❌ [GRAYLIST] Error getting stats:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve gray list statistics'
-    });
-  }
-});
-
-/**
- * DELETE /api/v1/proxy/graylist/:proxyServer
- * Remove an entry from gray list
- * URL param: proxyServer (URL encoded proxy server address)
- * Query: provider (required)
- */
-router.delete('/graylist/:proxyServer', (req: Request, res: Response): void => {
-  try {
-    const proxyServer = decodeURIComponent(req.params.proxyServer as string);
-    const providerQuery = req.query.provider;
-
-    if (!providerQuery || typeof providerQuery !== 'string') {
-      res.status(400).json({
-        success: false,
-        error: 'Provider query parameter is required'
-      });
-      return;
-    }
-
-    proxyManager.removeFromGrayList(providerQuery, proxyServer);
-
-    res.json({
-      success: true,
-      message: `Removed ${providerQuery} from gray list for proxy ${proxyServer}`
-    });
-  } catch (error: any) {
-    console.error('❌ [GRAYLIST] Error removing entry:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to remove entry from gray list'
-    });
-  }
-});
-
-/**
- * POST /api/v1/proxy/graylist/clear
- * Clear all gray list entries
- */
-router.post('/graylist/clear', (req: Request, res: Response): void => {
-  try {
-    const currentCount = proxyManager.getGrayList().length;
-    proxyManager.clearGrayList();
-
-    res.json({
-      success: true,
-      message: `Cleared ${currentCount} entries from gray list`
-    });
-  } catch (error: any) {
-    console.error('❌ [GRAYLIST] Error clearing graylist:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to clear gray list'
     });
   }
 });

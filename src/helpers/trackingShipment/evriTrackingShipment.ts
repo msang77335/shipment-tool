@@ -1,6 +1,6 @@
 import { Page } from 'playwright';
 import { applyStealthPatches, ScreenshotQuery, setStealthHeaders } from '..';
-import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
+import { PlaywrightBrowserSingleton } from '../browser/PlaywrightBrowserSingleton';
 
 /**
  * Evri tracking function - navigates from homepage, fills form, extracts status

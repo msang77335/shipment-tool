@@ -1,6 +1,6 @@
 import { Page } from 'playwright';
-import { applyStealthPatches, captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isJTExpress, isUSPS, ScreenshotQuery, setStealthHeaders, waitBeforeRetry, proxyManager } from "..";
-import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
+import { applyStealthPatches, captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isJTExpress, isUSPS, proxyManager, ScreenshotQuery, setStealthHeaders, waitBeforeRetry } from "..";
+import { PlaywrightBrowserSingleton } from '../browser/PlaywrightBrowserSingleton';
 
 const getTrackingURL = (codes: string, provider: string) => {
   if (isJTExpress(provider)) {
@@ -196,12 +196,6 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
 
   // No blocking issue AND no tracking data found → add to gray list
   console.log(`⚠️ [AFTERSHIP] No tracking data found (not a blocking issue)`);
-  const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
-  proxyManager.addToGrayList({
-    provider,
-    proxyServer: currentProxyServer,
-    reason: 'NO_TRACKING_DATA'
-  });
 
   return null;
 }

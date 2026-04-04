@@ -1,6 +1,6 @@
 import { Page } from "playwright";
 import { captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, waitBeforeRetry } from "..";
-import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
+import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 
 async function navigateAndTracking(page: Page, trackingURL: string, codes: string, attempt: number, maxRetries: number) {
   console.log(`🌐 [UNIUNI] Navigating to uniuni.com (attempt ${attempt}/${maxRetries})...`);

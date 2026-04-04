@@ -2,7 +2,7 @@ import { Solver } from '@2captcha/captcha-solver';
 import fs from 'node:fs';
 import path from 'node:path';
 import { env } from '..';
-import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
+import { PlaywrightBrowserSingleton } from '../browser/PlaywrightBrowserSingleton';
 
 export async function viettelPostTrackingShipment(code?: string): Promise<{ status: string; buffer: Buffer }> {
   const resp = await getTrackingData(code);

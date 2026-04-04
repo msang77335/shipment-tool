@@ -1,5 +1,5 @@
 import { isASENDIA, isGiaoHangNhanh, isOnTrac, isSPX, isYunExpress } from "../";
-import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
+import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 
 async function navigateToPage(page: any, url: string): Promise<void> {
   console.log(`🌐 [TRACKING SHIPMENT] Navigating to ${url}...`);

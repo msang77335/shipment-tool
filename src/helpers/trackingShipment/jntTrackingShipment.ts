@@ -2,13 +2,13 @@ import axios from "axios";
 import * as cheerio from 'cheerio';
 import { HttpProxyAgent } from "http-proxy-agent";
 import { HttpsProxyAgent } from "https-proxy-agent";
+import { replace } from "lodash";
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 import { env } from '../env';
-import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
-import { ProxyInfo, proxyManager } from '../proxyManager';
+import { ProxyInfo, proxyManager } from '../proxy/proxyManager';
 import { aftershipTrackingShipment } from "./aftershipTrackingShipment";
-import { replace } from "lodash";
 const trackingUrl = "https://jtexpress.vn/vi/tracking";
 
 const headers = {

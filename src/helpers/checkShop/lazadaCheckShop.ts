@@ -1,6 +1,6 @@
 import { Page } from 'playwright';
 import { CheckShop, ScreenshotResult, ShopSiteEnum } from '.';
-import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
+import { PlaywrightBrowserSingleton } from '../browser/PlaywrightBrowserSingleton';
 
 export class LazadaCheckShop extends CheckShop {
   readonly site = ShopSiteEnum.Lazada;

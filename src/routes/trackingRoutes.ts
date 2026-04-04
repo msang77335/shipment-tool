@@ -1,6 +1,7 @@
 import { Request, Response, Router } from 'express';
-import { isASENDIA, isBestExpress, isDHL, isEVRI, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { isASENDIA, isAustraliaPost, isBestExpress, isDHL, isEVRI, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
+import { australiaPostTrackingShipment } from '../helpers/trackingShipment/australiaTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
 import { dhlTrackingShipment } from '../helpers/trackingShipment/dhlTrackingShipment';
 import { evriTrackingShipment } from '../helpers/trackingShipment/evriTrackingShipment';
@@ -45,7 +46,8 @@ const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }
   createProviderHandler(isASENDIA, (codes, p) => trackingShipment(`https://track.asendia.com/track/${codes}`, p)),
   createProviderHandler(isSingPost, (codes) => singPostTrackingShipment({ codes })),
   createProviderHandler(isDHL, (codes) => dhlTrackingShipment({ codes })),
-  createProviderHandler(isGofo, (codes) => gofoTrackingShipment({ codes }))
+  createProviderHandler(isGofo, (codes) => gofoTrackingShipment({ codes })),
+  createProviderHandler(isAustraliaPost, (codes) => australiaPostTrackingShipment(codes))
 ];
 
 async function getTrackingResult(provider: string, codes: string): Promise<{ status: string; buffer: Buffer } | null> {

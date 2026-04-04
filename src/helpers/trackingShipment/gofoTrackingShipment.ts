@@ -1,6 +1,6 @@
 import { Page } from "playwright";
 import { applyStealthPatches, setStealthHeaders } from "..";
-import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
+import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 
 const GOFO_TRACKING_URL = () =>
   `https://www.gofo.com/us/track`;

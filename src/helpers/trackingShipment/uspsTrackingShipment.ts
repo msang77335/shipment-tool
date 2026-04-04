@@ -1,7 +1,7 @@
-import { Page } from 'playwright';
 import { snakeCase } from 'lodash';
-import { PlaywrightBrowserSingleton } from '../PlaywrightBrowserSingleton';
+import { Page } from 'playwright';
 import { applyStealthPatches, ScreenshotQuery, setStealthHeaders } from '..';
+import { PlaywrightBrowserSingleton } from '../browser/PlaywrightBrowserSingleton';
 
 const USPS_TRACKING_URL = (codes: string) =>
   `https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=${encodeURIComponent(codes)}&tABt=true`;
@@ -37,7 +37,7 @@ async function checkBotDetected(page: Page): Promise<boolean> {
 }
 
 async function getShipmentStatus(page: Page): Promise<string> {
-  return await page.evaluate(() => {
+  const detailText = await page.evaluate(() => {
     const doc = (globalThis as any).document;
 
     const container = doc.querySelector('.tracking-progress-bar-status-container');
@@ -49,7 +49,7 @@ async function getShipmentStatus(page: Page): Promise<string> {
 
     const tbDetail = doc.querySelector('.tb-step.current-step .tb-status-detail');
     const detailText = tbDetail?.textContent?.trim() || '';
-    if (detailText) return snakeCase(detailText).toUpperCase();
+    if (detailText) return detailText;
 
     const banner = doc.querySelector('.latest-update-banner-wrapper .banner-content');
     const bannerText = banner?.textContent?.trim() || '';
@@ -57,6 +57,12 @@ async function getShipmentStatus(page: Page): Promise<string> {
 
     return 'UNKNOWN';
   });
+
+  if (detailText && detailText !== 'DELIVERED' && detailText !== 'UNKNOWN') {
+    return snakeCase(detailText).toUpperCase();
+  }
+
+  return detailText;
 }
 
 /** Visit USPS homepage first to warm up cookies — reduces bot-score significantly */

@@ -1,6 +1,6 @@
 import { CookieParam, Page } from 'puppeteer';
 import { CheckShop, ScreenshotResult, ShopSiteEnum } from '.';
-import { PuppeteerBrowserSingleton } from '../PuppeteerBrowserSingleton';
+import { PuppeteerBrowserSingleton } from '../browser/PuppeteerBrowserSingleton';
 import { getEnv } from '../env';
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));

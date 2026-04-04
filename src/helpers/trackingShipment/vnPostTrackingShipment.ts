@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Page } from 'playwright';
 import { getNextGeminiApiKey } from '..';
-import { PlaywrightBrowserSingleton } from "../PlaywrightBrowserSingleton";
+import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 
 async function navigateToPage(page: Page, url: string): Promise<void> {
   try {
