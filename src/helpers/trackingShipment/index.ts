@@ -33,7 +33,7 @@ async function checkTrackingData(page: any): Promise<boolean> {
     const ontracErrorMsg = (globalThis as any).document.querySelector('#js-track-error-message');
     const ontracErrorVisible = ontracErrorMsg?.style?.display === 'block';
     const ontracHasData = !(ontracErrorVisible && ontracErrorMsg?.textContent?.includes('No tracking information for'));
-
+    
     return spxHasData || ghnHasData || yunHasData || ontracHasData;
   });
 }

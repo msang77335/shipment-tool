@@ -1,21 +1,78 @@
 import { Request, Response, Router } from 'express';
-import { isASENDIA, isBestExpress, isEVRI, isGiaoHangNhanh, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { isASENDIA, isBestExpress, isDHL, isEVRI, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
+import { dhlTrackingShipment } from '../helpers/trackingShipment/dhlTrackingShipment';
 import { evriTrackingShipment } from '../helpers/trackingShipment/evriTrackingShipment';
+import { gofoTrackingShipment } from '../helpers/trackingShipment/gofoTrackingShipment';
 import { jntShipmentTrackingShipment } from '../helpers/trackingShipment/jntTrackingShipment';
+import { singPostTrackingShipment } from '../helpers/trackingShipment/singPostTrackingShipment';
 import { uniTrackingShipment } from '../helpers/trackingShipment/uniTrackingShipment';
 import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingShipment';
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
-import { singPostTrackingShipment } from '../helpers/trackingShipment/singPostTrackingShipment';
 
 const router = Router();
 
 interface TrackingQuery {
   provider?: string;
   codes?: string;
+}
+
+type TrackingHandler = (codes: string, provider: string) => Promise<{ status: string; buffer: Buffer }>;
+
+const providerHandlers: Record<string, (predicate: (p: string) => boolean, handle: TrackingHandler) => { check: (p: string) => boolean; handle: TrackingHandler }> = {};
+
+const createProviderHandler = (predicate: (p: string) => boolean, handler: TrackingHandler) => ({
+  check: predicate,
+  handle: handler
+});
+
+const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }> = [
+  createProviderHandler(isViettelPost, (codes) => viettelPostTrackingShipment(codes)),
+  createProviderHandler(isSPX, (codes, p) => trackingShipment(`https://spx.vn/track?${codes}`, p)),
+  createProviderHandler(isGiaoHangNhanh, (codes, p) => trackingShipment(`https://donhang.ghn.vn/?order_code=${codes}`, p)),
+  createProviderHandler(isYunExpress, (codes, p) => trackingShipment(`https://www.yuntrack.com/parcelTracking?id=${codes}`, p)),
+  createProviderHandler(isOnTrac, (codes, p) => trackingShipment(`https://www.ontrac.com/tracking/?number=${codes}`, p)),
+  createProviderHandler(isYW, (codes) => ywTrackingShipment({ codes })),
+  createProviderHandler(isJTExpress, (codes) => jntShipmentTrackingShipment(codes)),
+  createProviderHandler(isUSPS, (codes) => uspsTrackingShipment({ codes })),
+  createProviderHandler(isVnPost, (codes) => vnPostTrackingShipment(codes)),
+  createProviderHandler(isBestExpress, (codes) => bestExpressTrackingShipment(codes)),
+  createProviderHandler(isUNIUNI, (codes) => uniTrackingShipment({ codes })),
+  createProviderHandler(isEVRI, (codes) => evriTrackingShipment({ codes })),
+  createProviderHandler(isASENDIA, (codes, p) => trackingShipment(`https://track.asendia.com/track/${codes}`, p)),
+  createProviderHandler(isSingPost, (codes) => singPostTrackingShipment({ codes })),
+  createProviderHandler(isDHL, (codes) => dhlTrackingShipment({ codes })),
+  createProviderHandler(isGofo, (codes) => gofoTrackingShipment({ codes }))
+];
+
+async function getTrackingResult(provider: string, codes: string): Promise<{ status: string; buffer: Buffer } | null> {
+  const handlerConfig = handlers.find(h => h.check(provider));
+  if (handlerConfig) {
+    return handlerConfig.handle(codes, provider);
+  }
+  return null;
+}
+
+function sendSuccessResponse(res: Response, result: { status: string; buffer: Buffer }, duration: number, provider: string): void {
+  console.log(`✅ [TRACKING IMAGE] Completed successfully in ${duration}ms`);
+  console.log(`📊 [TRACKING IMAGE] Provider: ${provider}, Status: ${result.status}`);
+  console.log(`🖼️ [TRACKING IMAGE] Image size: ${result.buffer.length} bytes`);
+
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Content-Length', result.buffer.length.toString());
+  res.setHeader('X-Tracking-Status', result.status);
+  res.setHeader('X-Processing-Time', `${duration}ms`);
+  res.send(result.buffer);
+}
+
+function sendErrorResponse(res: Response, statusCode: number, error: string, message?: string, duration?: number): void {
+  const responseBody: any = { success: false, error };
+  if (message) responseBody.message = message;
+  if (duration) responseBody.duration = `${duration}ms`;
+  res.status(statusCode).json(responseBody);
 }
 
 // POST /api/v1/tracking - Get tracking image as binary with metadata in headers
@@ -28,81 +85,27 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     if (!provider || !codes) {
       console.log(`❌ [TRACKING IMAGE] Missing provider or codes parameter`);
-      res.status(400).json({
-        success: false,
-        error: 'Provider and codes parameters are required'
-      });
+      sendErrorResponse(res, 400, 'Provider and codes parameters are required');
       return;
     }
 
     console.log(`📦 [TRACKING IMAGE] Processing ${provider} tracking code: ${codes}`);
 
-    let result: { status: string; buffer: Buffer; };
-
-    // Handle different providers
-    if (isViettelPost(provider)) {
-      result = await viettelPostTrackingShipment(codes);
-    } else if (isSPX(provider)) {
-      result = await trackingShipment(`https://spx.vn/track?${codes}`, provider);
-    } else if (isGiaoHangNhanh(provider)) {
-      result = await trackingShipment(`https://donhang.ghn.vn/?order_code=${codes}`, provider);
-    } else if (isYunExpress(provider)) {
-      result = await trackingShipment(`https://www.yuntrack.com/parcelTracking?id=${codes}`, provider);
-    } else if (isOnTrac(provider)) {
-      result = await trackingShipment(`https://www.ontrac.com/tracking/?number=${codes}`, provider);
-    } else if (isYW(provider)) {
-      result = await ywTrackingShipment({ codes });
-    } else if (isJTExpress(provider)) {
-      result = await jntShipmentTrackingShipment(codes);
-    } else if (isUSPS(provider) && codes.split(',').length === 1) {
-      result = await uspsTrackingShipment({ codes });
-    } else if (isVnPost(provider)) {
-      result = await vnPostTrackingShipment(codes);
-    } else if (isBestExpress(provider)) {
-      result = await bestExpressTrackingShipment(codes);
-    } else if (isUNIUNI(provider)) {
-      result = await uniTrackingShipment({ codes });
-    } else if (isEVRI(provider)) {
-      result = await evriTrackingShipment({ codes });
-    } else if (isASENDIA(provider)) {
-      result = await trackingShipment(`https://track.asendia.com/track/${codes}`, provider);
-    } else if (isSingPost(provider)) {
-      result = await singPostTrackingShipment({ codes });
-    } else {
+    const result = await getTrackingResult(provider, codes);
+    
+    if (!result) {
       console.log(`❌ [TRACKING IMAGE] Unsupported provider: ${provider}`);
-      res.status(400).json({
-        success: false,
-        error: `Provider '${provider}' is not supported yet`
-      });
+      sendErrorResponse(res, 400, `Provider '${provider}' is not supported yet`);
       return;
     }
 
-    const endTime = Date.now();
-    const duration = endTime - startTime;
-    console.log(`✅ [TRACKING IMAGE] Completed successfully in ${duration}ms`);
-    console.log(`📊 [TRACKING IMAGE] Provider: ${provider}, Status: ${result.status}`);
-    console.log(`🖼️ [TRACKING IMAGE] Image size: ${result.buffer.length} bytes`);
-
-    // Set response headers with metadata
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Content-Length', result.buffer.length.toString());
-    res.setHeader('X-Tracking-Status', result.status);
-    res.setHeader('X-Processing-Time', `${duration}ms`);
-
-    // Send binary image
-    res.send(result.buffer);
+    const duration = Date.now() - startTime;
+    sendSuccessResponse(res, result, duration, provider);
   } catch (error: any) {
-    const endTime = Date.now();
-    const duration = endTime - startTime;
+    const duration = Date.now() - startTime;
     console.error(`💥 [TRACKING IMAGE] Error occurred after ${duration}ms:`, error);
     console.error(`💥 [TRACKING IMAGE] Error stack:`, error.stack);
-
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get tracking image',
-      message: error.message,
-      duration: `${duration}ms`
-    });
+    sendErrorResponse(res, 500, 'Failed to get tracking image', error.message, duration);
   }
 });
 

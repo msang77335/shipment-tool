@@ -57,7 +57,6 @@ class ProxyManager {
   private proxies: ProxyInfo[] = [];
   private blacklist: Map<string, BlacklistEntry> = new Map();
   private graylist: Map<string, GrayListEntry> = new Map();
-  private readonly BLACKLIST_EXPIRY_TIME = 60 * 60 * 1000; // 1 hour in milliseconds
 
   constructor() {
     // Initialize with proxies from environment
@@ -121,15 +120,6 @@ class ProxyManager {
       return { isBlacklisted: false };
     }
 
-    // Check if entry has expired
-    const age = Date.now() - entry.timestamp;
-    if (age > this.BLACKLIST_EXPIRY_TIME) {
-      this.blacklist.delete(key);
-      const proxyInfo = proxyServer ? ` (${proxyServer})` : '';
-      console.log(`⏰ [BLACKLIST] Removed expired entry for ${provider}${proxyInfo}`);
-      return { isBlacklisted: false };
-    }
-
     return { isBlacklisted: true, entry };
   }
 
@@ -148,22 +138,7 @@ class ProxyManager {
    * Get all current blacklist entries
    */
   getBlacklist(): BlacklistEntry[] {
-    const now = Date.now();
-    const validEntries: BlacklistEntry[] = [];
-
-    for (const [key, entry] of this.blacklist.entries()) {
-      const age = now - entry.timestamp;
-      if (age > this.BLACKLIST_EXPIRY_TIME) {
-        this.blacklist.delete(key);
-      } else {
-        validEntries.push({
-          ...entry,
-          expiresIn: Math.ceil((this.BLACKLIST_EXPIRY_TIME - age) / 1000)
-        });
-      }
-    }
-
-    return validEntries;
+    return Array.from(this.blacklist.values());
   }
 
   /**
