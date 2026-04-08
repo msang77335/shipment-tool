@@ -13,7 +13,6 @@ import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingSh
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
-import { upsTrackingShipment } from '../helpers/trackingShipment/upsTrackingShipment';
 
 const router = Router();
 
@@ -49,7 +48,6 @@ const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }
   createProviderHandler(isDHL, (codes) => dhlTrackingShipment({ codes })),
   createProviderHandler(isGofo, (codes) => gofoTrackingShipment({ codes })),
   createProviderHandler(isAustraliaPost, (codes) => australiaPostTrackingShipment(codes)),
-  createProviderHandler(isUPS, (codes) => upsTrackingShipment({ codes }))
 ];
 
 async function getTrackingResult(provider: string, codes: string): Promise<{ status: string; buffer: Buffer } | null> {
