@@ -2,6 +2,23 @@ import { Browser, Page } from "puppeteer";
 import { waitBeforeRetry } from "..";
 import { PuppeteerBrowserSingleton } from "../browser/PuppeteerBrowserSingleton";
 
+async function hideCrAnchor(page: Page): Promise<void> {
+  try {
+    // Fallback: hide the dialog if button not found
+    const dialog = await page.$('.grecaptcha-badge');
+    if (dialog) {
+      await page.evaluate((el) => {
+        if (el) {
+          (el as any).style.display = 'none';
+        }
+      }, dialog);
+      console.log(`✅ [UPS] Cookie dialog hidden via CSS`);
+    }
+  } catch (err: any) {
+    console.log(`⚠️ [UPS] Failed to hide cookie dialog: ${err.message}`);
+  }
+}
+
 /** Hide the UPS cookie consent dialog */
 async function hideCookieDialog(page: Page): Promise<void> {
   try {
@@ -47,7 +64,7 @@ async function navigateAndTracking(page: Page, trackingURL: string, codes: strin
   await new Promise(resolve => setTimeout(resolve, 5000));
 
   const btnAcceptCookie = await page.$('#onetrust-accept-btn-handler');
-  if (btnAcceptCookie) {  
+  if (btnAcceptCookie) {
     await page.click('#onetrust-accept-btn-handler');
     console.log(`✅ [UPS] Accepted cookie consent`);
   }
@@ -71,6 +88,7 @@ async function checkTrackingData(page: Page): Promise<boolean> {
   if (pageContent) {
     await hideAssistantPanel(page);
     await hideCookieDialog(page);
+    await hideCrAnchor(page);
   }
 
   return !!pageContent;
@@ -131,7 +149,7 @@ async function retryScreenshotCapture({ browserContext, codes, maxRetries }: { b
       if (attempt < maxRetries) {
         await page?.close();
         await waitBeforeRetry(attempt);
-      } 
+      }
     } catch (error: any) {
       lastError = error;
       console.error(`💥 [UPS] Attempt ${attempt}/${maxRetries} failed:`, error.message);
