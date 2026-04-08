@@ -118,7 +118,7 @@ export async function uniTrackingShipment({ codes }: { codes: string }): Promise
 
     return {
       buffer,
-      status: status ? 'DELIVERED' : 'UNKNOWN'
+      status: status === 'DELIVERED' ? 'DELIVERED' : 'UNKNOWN'
     };
   } catch (error) {
     console.error(`💥 [UNIUNI] Error in uniTrackingShipment:`, error);

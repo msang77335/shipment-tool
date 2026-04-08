@@ -109,6 +109,11 @@ export function isAustraliaPost(providerStr: string) {
   return upperStr.includes('AUSTRALIA POST') || upperStr.includes('AU POST');
 }
 
+export function isUPS(providerStr: string) {
+  const upperStr = providerStr.toUpperCase();
+  return upperStr.includes('UPS')
+};
+
 export async function createPage(browserContext: any): Promise<Page> {
   const page = await browserContext.newPage();
   page.setDefaultTimeout(120000);
@@ -195,4 +200,79 @@ export async function setStealthHeaders(page: Page): Promise<void> {
     'Cache-Control': 'max-age=0',
   });
   console.log(`🥸 [Stealth] UA: ${ua.slice(0, 60)}...`);
+}
+
+/** Generate a random delay between min and max milliseconds */
+function randomDelay(min: number = 300, max: number = 1500): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/** Human-like mouse movement with easing */
+export async function humanLikeMouseMove(page: Page, selector: string): Promise<void> {
+  try {
+    const element = await page.$(selector);
+    if (!element) {
+      console.log(`⚠️ [Human] Element not found for mouse move: ${selector}`);
+      return;
+    }
+
+    const box = await element.boundingBox();
+    if (!box) {
+      console.log(`⚠️ [Human] Cannot get bounding box for: ${selector}`);
+      return;
+    }
+
+    // Move to a point slightly offset from center to make it look more natural
+    const targetX = box.x + box.width / 2 + (Math.random() - 0.5) * 20;
+    const targetY = box.y + box.height / 2 + (Math.random() - 0.5) * 20;
+
+    await page.mouse.move(targetX, targetY);
+    console.log(`🖱️ [Human] Moved mouse to ${selector}`);
+  } catch (err: any) {
+    console.log(`⚠️ [Human] Mouse move failed: ${err.message}`);
+  }
+}
+
+/** Click with human-like behavior (delay + optional mouse movement) */
+export async function humanLikeClick(page: Page, selector: string, moveMouseFirst: boolean = true): Promise<void> {
+  try {
+    // Simulate human reaction time - wait before clicking
+    const delay = randomDelay(300, 1500);
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    // Optionally move mouse to element first
+    if (moveMouseFirst) {
+      await humanLikeMouseMove(page, selector);
+      // Add small delay after mouse movement
+      await new Promise(resolve => setTimeout(resolve, randomDelay(100, 400)));
+    }
+
+    await page.click(selector);
+    console.log(`👆 [Human] Clicked ${selector} (after ${delay}ms delay)`);
+  } catch (err: any) {
+    console.log(`⚠️ [Human] Click failed: ${err.message}`);
+    throw err;
+  }
+}
+
+/** Type text with human-like behavior (delayed keystroke simulation) */
+export async function humanLikeType(page: Page, selector: string, text: string, delayBetweenKeys: number = 50): Promise<void> {
+  try {
+    // Wait before focusing on input
+    const preDelay = randomDelay(200, 800);
+    await new Promise(resolve => setTimeout(resolve, preDelay));
+
+    await page.click(selector);
+    console.log(`✏️ [Human] Focused on ${selector}`);
+
+    // Type with realistic keystroke delays
+    for (const char of text) {
+      await new Promise(resolve => setTimeout(resolve, randomDelay(delayBetweenKeys - 20, delayBetweenKeys + 20)));
+      await page.keyboard.type(char);
+    }
+    console.log(`📝 [Human] Typed "${text}" with realistic delays`);
+  } catch (err: any) {
+    console.log(`⚠️ [Human] Type failed: ${err.message}`);
+    throw err;
+  }
 }

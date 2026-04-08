@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { isASENDIA, isAustraliaPost, isBestExpress, isDHL, isEVRI, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { isASENDIA, isAustraliaPost, isBestExpress, isDHL, isEVRI, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUPS, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
 import { australiaPostTrackingShipment } from '../helpers/trackingShipment/australiaTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
@@ -13,6 +13,7 @@ import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingSh
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
+import { upsTrackingShipment } from '../helpers/trackingShipment/upsTrackingShipment';
 
 const router = Router();
 
@@ -47,7 +48,8 @@ const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }
   createProviderHandler(isSingPost, (codes) => singPostTrackingShipment({ codes })),
   createProviderHandler(isDHL, (codes) => dhlTrackingShipment({ codes })),
   createProviderHandler(isGofo, (codes) => gofoTrackingShipment({ codes })),
-  createProviderHandler(isAustraliaPost, (codes) => australiaPostTrackingShipment(codes))
+  createProviderHandler(isAustraliaPost, (codes) => australiaPostTrackingShipment(codes)),
+  createProviderHandler(isUPS, (codes) => upsTrackingShipment({ codes }))
 ];
 
 async function getTrackingResult(provider: string, codes: string): Promise<{ status: string; buffer: Buffer } | null> {
@@ -94,7 +96,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     console.log(`📦 [TRACKING IMAGE] Processing ${provider} tracking code: ${codes}`);
 
     const result = await getTrackingResult(provider, codes);
-    
+
     if (!result) {
       console.log(`❌ [TRACKING IMAGE] Unsupported provider: ${provider}`);
       sendErrorResponse(res, 400, `Provider '${provider}' is not supported yet`);
