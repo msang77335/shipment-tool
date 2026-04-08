@@ -1,6 +1,6 @@
-import { Page } from "playwright";
-import { applyStealthPatches, captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, setStealthHeaders, waitBeforeRetry, humanLikeClick, humanLikeType } from "..";
-import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
+import { Page } from "puppeteer";
+import { waitBeforeRetry } from "..";
+import { PuppeteerBrowserSingleton } from "../browser/PuppeteerBrowserSingleton";
 
 /** Hide the UPS cookie consent dialog */
 async function hideCookieDialog(page: Page): Promise<void> {
@@ -48,15 +48,17 @@ async function navigateAndTracking(page: Page, trackingURL: string, codes: strin
 
   const btnAcceptCookie = await page.$('#onetrust-accept-btn-handler');
   if (btnAcceptCookie) {  
-    await humanLikeClick(page, '#onetrust-accept-btn-handler');
+    await page.click('#onetrust-accept-btn-handler');
     console.log(`✅ [UPS] Accepted cookie consent`);
   }
 
   console.log(`⌨️ [UPS] Entering tracking code...`);
-  await humanLikeType(page, '#tracking-numbers', codes);
+  await page.$eval('#tracking-numbers', (el, value) => {
+    (el).value = value;
+  }, codes);
 
   console.log(`⌨️ [UPS] Clicking Track button...`);
-  await humanLikeClick(page, '.submit-button');
+  await page.click('.submit-button');
 
   console.log(`⏳ [UPS] Waiting 10 seconds for content to load...`);
   await new Promise(resolve => setTimeout(resolve, 10000));
@@ -100,7 +102,7 @@ async function attemptScreenshot({ page, codes, attempt, maxRetries }: { page: P
 
     console.log(`✅ [UPS] Tracking data found: ${status}`);
 
-    const buffer = await captureScreenshot(page, 1400, 900);
+    const buffer = await page.screenshot({ fullPage: true }) as Buffer;
     return { buffer, status };
   }
 
@@ -114,28 +116,26 @@ async function retryScreenshotCapture({ browserContext, codes, maxRetries }: { b
     let page: Page | undefined;
     try {
       console.log(`🆕 [UPS] Creating new page (attempt ${attempt}/${maxRetries})...`);
-      page = await createPage(browserContext);
-
-      await applyStealthPatches(page);
-      await setStealthHeaders(page);
+      page = await browserContext.newPage();
+      if (!page) {
+        throw new Error('Failed to create page');
+      }
 
       const result = await attemptScreenshot({ page, codes, attempt, maxRetries });
 
       if (result) {
-        await closePage(page);
+        await page?.close();
         return result;
       }
 
       if (attempt < maxRetries) {
-        await closePage(page);
+        await page?.close();
         await waitBeforeRetry(attempt);
-      } else {
-        return await captureLastAttemptScreenshot(page, 1400, 900);
-      }
+      } 
     } catch (error: any) {
       lastError = error;
       console.error(`💥 [UPS] Attempt ${attempt}/${maxRetries} failed:`, error.message);
-      await closePage(page);
+      await page?.close();
       if (attempt < maxRetries) {
         await waitBeforeRetry(attempt);
       }
@@ -149,7 +149,7 @@ async function retryScreenshotCapture({ browserContext, codes, maxRetries }: { b
 export async function upsTrackingShipment({ codes }: { codes: string }): Promise<{ status: string; buffer: Buffer }> {
   console.log(`📍 [UPS] Starting screenshot for tracking: ${codes}`);
 
-  const browserContext = await PlaywrightBrowserSingleton.getContextWithoutProxy();
+  const browserContext = await PuppeteerBrowserSingleton.getInstance();
   if (!browserContext) {
     throw new Error('Failed to get browser context');
   }

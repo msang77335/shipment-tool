@@ -4,7 +4,7 @@ A robust REST API for tracking shipments across multiple carriers using automate
 
 ## 🌟 Features
 
-- 📦 **Multi-Carrier Support** - Track shipments from 10+ shipping providers
+- 📦 **Multi-Carrier Support** - Track shipments from 15+ shipping providers
 - 📸 **Screenshot-Based Tracking** - Visual proof of tracking status
 - 🤖 **Browser Automation** - Playwright for reliable page rendering
 - 🔐 **Security Hardened** - Helmet, CORS, and rate limiting enabled
@@ -19,15 +19,20 @@ A robust REST API for tracking shipments across multiple carriers using automate
 
 | Provider | Region | Notes |
 |----------|--------|-------|
+| **Australia Post** | Australia | Australian postal service |
 | **Best Express** | Vietnam | Local logistics |
+| **DHL** | International | Global courier |
+| **Evri** | United Kingdom | UK parcel delivery |
 | **GHN** (Giao Hang Nhanh) | Vietnam | Express delivery |
+| **GoFo** | United States | Regional carrier |
 | **JT Express** | Asia-Pacific | International shipping |
 | **Shopee Express (SPX)** | Southeast Asia | E-commerce logistics |
+| **SingPost** (Singapore Post) | Singapore | Singapore postal service |
+| **UniUni** | International | International logistics |
 | **USPS** | United States | Postal service |
 | **Viettel Post** | Vietnam | Postal & logistics |
 | **VN Post** | Vietnam | National postal service |
 | **YunExpress** | China | International logistics |
-| **OnTrac** | United States | Regional carrier |
 | **YW (yw56.com)** | China | International logistics |
 
 ## 🚀 Getting Started
@@ -201,11 +206,17 @@ Get tracking information as a screenshot image with metadata.
 | `codes` | string | Yes | Tracking number(s) - comma-separated for multiple |
 
 #### Provider Codes
+- `australia` - Australia Post
 - `bestexpress` - Best Express
+- `dhl` - DHL
+- `evri` - Evri
 - `ghn` - Giao Hang Nhanh
+- `gofo` - GoFo
 - `jtexpress` - JT Express
 - `ontrac` - OnTrac
+- `singpost` - SingPost
 - `spx` - Shopee Express
+- `uni` - UniUni
 - `usps` - USPS
 - `viettelpost` - Viettel Post
 - `vnpost` - VN Post
