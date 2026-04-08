@@ -1,4 +1,4 @@
-import { Page } from "puppeteer";
+import { Browser, Page } from "puppeteer";
 import { waitBeforeRetry } from "..";
 import { PuppeteerBrowserSingleton } from "../browser/PuppeteerBrowserSingleton";
 
@@ -102,14 +102,14 @@ async function attemptScreenshot({ page, codes, attempt, maxRetries }: { page: P
 
     console.log(`✅ [UPS] Tracking data found: ${status}`);
 
-    const buffer = await page.screenshot({ fullPage: true }) as Buffer;
+    const buffer = await page.screenshot({ fullPage: false, clip: { x: 0, y: 0, width: 1280, height: 900 } }) as Buffer;
     return { buffer, status };
   }
 
   return null;
 }
 
-async function retryScreenshotCapture({ browserContext, codes, maxRetries }: { browserContext: any; codes: string; maxRetries: number; }): Promise<{ buffer: Buffer; status: string }> {
+async function retryScreenshotCapture({ browserContext, codes, maxRetries }: { browserContext: Browser; codes: string; maxRetries: number; }): Promise<{ buffer: Buffer; status: string }> {
   let lastError;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {

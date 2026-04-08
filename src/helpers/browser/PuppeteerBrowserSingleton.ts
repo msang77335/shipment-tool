@@ -86,20 +86,6 @@ export class PuppeteerBrowserSingleton {
     return page;
   }
 
-  static async newPage(): Promise<Page | null> {
-    const browser = await this.getInstance();
-    if (!browser) {
-      console.error('❌ [PUPPETEER] Cannot create page, browser instance is null');
-      return null;
-    }
-
-    console.log('🆕 [PUPPETEER] Creating a fresh page...');
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 1080 });
-    console.log('✅ [PUPPETEER] Fresh page created');
-    return page;
-  }
-
   static async close(): Promise<void> {
     if (this.browserInstance) {
       console.log('🔌 [PUPPETEER] Closing browser instance...');
