@@ -102,7 +102,7 @@ async function attemptScreenshot({ page, codes, attempt, maxRetries }: { page: P
 
     console.log(`✅ [UPS] Tracking data found: ${status}`);
 
-    const buffer = await page.screenshot({ fullPage: false, clip: { x: 0, y: 0, width: 1280, height: 900 } }) as Buffer;
+    const buffer = await page.screenshot({ fullPage: false, clip: { x: 0, y: 0, width: 1180, height: 800 } }) as Buffer;
     return { buffer, status };
   }
 
