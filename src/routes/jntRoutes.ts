@@ -12,7 +12,7 @@ import { proxyManager } from '../helpers';
 import { phoneManager } from '../helpers/jnt/phone';
 import { PhoneBruteForceFinder } from '../helpers/jnt/scanPhone';
 import { scanPhoneJobManager } from '../helpers/jnt/scanPhoneJobManager';
-import { trackingHistManager } from '@/helpers/jnt/trackingHist';
+import { trackingHistManager } from '../helpers/jnt/trackingHist';
 
 const router = Router();
 
