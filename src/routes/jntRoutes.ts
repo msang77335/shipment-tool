@@ -12,6 +12,7 @@ import { proxyManager } from '../helpers';
 import { phoneManager } from '../helpers/jnt/phone';
 import { PhoneBruteForceFinder } from '../helpers/jnt/scanPhone';
 import { scanPhoneJobManager } from '../helpers/jnt/scanPhoneJobManager';
+import { trackingHistManager } from '@/helpers/jnt/trackingHist';
 
 const router = Router();
 
@@ -210,6 +211,66 @@ router.get('/scan-phone', (req: Request, res: Response) => {
     return res.status(500).json({
       status: 'error',
       message: 'Failed to list scan jobs',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * GET /api/jnt/tracking-history
+ * Get tracking history for J&T and AfterShip
+ * Query: ?site=J&T or ?site=AfterShip (optional)
+ */
+router.get('/tracking-history', (req: Request, res: Response) => {
+  try {
+    const { site } = req.query;
+    const validSites = ["J&T", "AfterShip"];
+    let trackingHist;
+
+    if (site && typeof site === 'string') {
+      if (!validSites.includes(site)) {
+        return res.status(400).json({
+          status: 'error',
+          message: `Invalid site parameter. Valid values are: ${validSites.join(', ')}`
+        });
+      }
+      trackingHist = trackingHistManager.getAllHist({ site: site as "J&T" | "AfterShip" });
+    } else {
+      trackingHist = trackingHistManager.getAllHist({});
+    }
+
+    return res.json({
+      status: 'success',
+      data: trackingHist,
+      count: trackingHist.length
+    });
+  } catch (error) {
+    console.error('❌ [JNT ROUTE] Error getting tracking history:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to get tracking history',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * DELETE /api/jnt/tracking-history
+ * Clear all tracking history records
+ */
+router.delete('/tracking-history', (req: Request, res: Response) => {
+  try {
+    trackingHistManager.clearHist();
+    return res.json({
+      status: 'success',
+      message: 'Tracking history cleared'
+    });
+  }
+  catch (error) {
+    console.error('❌ [JNT ROUTE] Error clearing tracking history:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to clear tracking history',
       error: error instanceof Error ? error.message : String(error)
     });
   }

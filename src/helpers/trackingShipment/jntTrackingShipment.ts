@@ -9,6 +9,7 @@ import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleto
 import { phoneManager } from "../jnt/phone";
 import { ProxyInfo, proxyManager } from '../proxy';
 import { aftershipTrackingShipment } from "./aftershipTrackingShipment";
+import { trackingHistManager } from "../jnt/trackingHist";
 const trackingUrl = "https://jtexpress.vn/vi/tracking";
 
 const headers = {
@@ -152,11 +153,13 @@ export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { 
     const overallStatus = determineOverallStatus(trackingData?.data ?? []);
     const buffer = await renderShipmentHtml({ success: trackingData?.success, data: trackingData.data ?? [] });
     console.log(`✅ [J&T TRACKING] Tracking completed for codes: ${codes}, Overall Status: ${overallStatus}, Image Size: ${buffer.length} bytes`);
+    trackingHistManager.addHist(codes, bankAccountName ?? '', "J&T");
     return {
       status: overallStatus,
       buffer: buffer
     };
   } else {
+    trackingHistManager.addHist(codes, bankAccountName ?? '', "AfterShip");
     return aftershipTrackingShipment({ codes, provider: "J&T" });
   }
 };
