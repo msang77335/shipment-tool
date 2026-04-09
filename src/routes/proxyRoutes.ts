@@ -1,11 +1,7 @@
 import { Request, Response, Router } from 'express';
-import { ProxyInfo, cleanupBrowserResources, launchBrowserWithProxy, proxyManager, setupPageAndNavigate } from '../helpers/proxy/proxyManager';
+import { cleanupBrowserResources, launchBrowserWithProxy, proxyManager, setupPageAndNavigate } from '../helpers/proxy';
 
 const router = Router();
-
-// =============================================================================
-// PROXY POOL
-// =============================================================================
 
 /**
  * GET /api/v1/proxy
@@ -37,131 +33,9 @@ router.get('/', (req: Request, res: Response): void => {
   }
 });
 
-/**
- * GET /api/v1/proxy/check/:proxyServer
- * Check if a proxy exists
- * URL param: proxyServer (URL encoded proxy server address)
- */
-router.get('/check/:proxyServer', (req: Request, res: Response): void => {
-  try {
-    const proxyServer = decodeURIComponent(req.params.proxyServer as string);
-    const exists = proxyManager.proxyExists(proxyServer);
-    const proxy = proxyManager.getProxyByServer(proxyServer);
-
-    res.json({
-      success: true,
-      data: {
-        exists,
-        proxy: proxy ? {
-          server: proxy.server,
-          username: proxy.username || 'N/A'
-        } : null
-      }
-    });
-  } catch (error: any) {
-    console.error('❌ [PROXY] Error checking proxy:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to check proxy'
-    });
-  }
-});
-
-/**
- * POST /api/v1/proxy
- * Add a new proxy
- * Body: { server: string, username?: string, password?: string, bypass?: string }
- */
-router.post('/', (req: Request, res: Response): void => {
-  try {
-    const proxyInfo: ProxyInfo = req.body;
-
-    const result = proxyManager.addProxy(proxyInfo);
-
-    if (result.success) {
-      res.status(201).json({
-        success: true,
-        message: result.message,
-        totalProxies: result.totalProxies
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        error: result.message,
-        totalProxies: result.totalProxies
-      });
-    }
-  } catch (error: any) {
-    console.error('❌ [PROXY] Error adding proxy:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to add proxy'
-    });
-  }
-});
-
-/**
- * DELETE /api/v1/proxy/:proxyServer
- * Delete a proxy by server URL
- * URL param: proxyServer (URL encoded proxy server address)
- */
-router.delete('/:proxyServer', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const proxyServer = decodeURIComponent(req.params.proxyServer as string);
-
-    const result = await proxyManager.removeProxy(proxyServer);
-
-    if (result.success) {
-      res.json({
-        success: true,
-        message: result.message,
-        totalProxies: result.totalProxies
-      });
-    } else {
-      res.status(404).json({
-        success: false,
-        error: result.message,
-        totalProxies: result.totalProxies
-      });
-    }
-  } catch (error: any) {
-    console.error('❌ [PROXY] Error removing proxy:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to remove proxy'
-    });
-  }
-});
-
 // =============================================================================
 // BLACKLIST
 // =============================================================================
-
-/**
- * POST /api/v1/proxy/remove-blacklisted
- * Remove from proxy pool all proxies that are currently in the blacklist
- */
-router.post('/remove-blacklisted', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const result = await proxyManager.removeBlacklistedProxies();
-
-    res.json({
-      success: true,
-      message: result.message,
-      removed: result.removed.map(p => ({
-        server: p.server,
-        username: p.username || 'N/A'
-      })),
-      remainingProxies: result.remaining
-    });
-  } catch (error: any) {
-    console.error('❌ [PROXY] Error removing blacklisted proxies:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to remove blacklisted proxies'
-    });
-  }
-});
 
 /**
  * GET /api/v1/proxy/blacklist
@@ -193,61 +67,6 @@ router.get('/blacklist', (req: Request, res: Response): void => {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve blacklist'
-    });
-  }
-});
-
-/**
- * POST /api/v1/proxy/blacklist/remove
- * Remove an entry from blacklist
- * Body: { provider: string, proxyServer?: string }
- */
-router.post('/blacklist/remove', (req: Request, res: Response): void => {
-  try {
-    const { provider, proxyServer } = req.body;
-
-    if (!provider) {
-      res.status(400).json({
-        success: false,
-        error: 'Provider is required'
-      });
-      return;
-    }
-
-    proxyManager.removeFromBlacklist(provider, proxyServer);
-
-    const proxyInfo = proxyServer ? ` (${proxyServer})` : '';
-    res.json({
-      success: true,
-      message: `Removed ${provider}${proxyInfo} from blacklist`
-    });
-  } catch (error: any) {
-    console.error('❌ [BLACKLIST] Error removing entry:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to remove entry from blacklist'
-    });
-  }
-});
-
-/**
- * POST /api/v1/proxy/blacklist/clear
- * Clear all blacklist entries
- */
-router.post('/blacklist/clear', (req: Request, res: Response): void => {
-  try {
-    const currentCount = proxyManager.getBlacklist().length;
-    proxyManager.clearBlacklist();
-
-    res.json({
-      success: true,
-      message: `Cleared ${currentCount} entries from blacklist`
-    });
-  } catch (error: any) {
-    console.error('❌ [BLACKLIST] Error clearing blacklist:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to clear blacklist'
     });
   }
 });

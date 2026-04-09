@@ -9,22 +9,21 @@ import { gofoTrackingShipment } from '../helpers/trackingShipment/gofoTrackingSh
 import { jntShipmentTrackingShipment } from '../helpers/trackingShipment/jntTrackingShipment';
 import { singPostTrackingShipment } from '../helpers/trackingShipment/singPostTrackingShipment';
 import { uniTrackingShipment } from '../helpers/trackingShipment/uniTrackingShipment';
+import { upsTrackingShipment } from '../helpers/trackingShipment/upsTrackingShipment';
 import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingShipment';
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
-import { upsTrackingShipment } from '../helpers/trackingShipment/upsTrackingShipment';
 
 const router = Router();
 
 interface TrackingQuery {
-  provider?: string;
+  provider: string;
   codes?: string;
+  bankAccountName?: string;
 }
 
-type TrackingHandler = (codes: string, provider: string) => Promise<{ status: string; buffer: Buffer }>;
-
-const providerHandlers: Record<string, (predicate: (p: string) => boolean, handle: TrackingHandler) => { check: (p: string) => boolean; handle: TrackingHandler }> = {};
+type TrackingHandler = ({ codes, provider, bankAccountName }: { codes: string; provider: string; bankAccountName?: string }) => Promise<{ status: string; buffer: Buffer }>;
 
 const createProviderHandler = (predicate: (p: string) => boolean, handler: TrackingHandler) => ({
   check: predicate,
@@ -32,30 +31,30 @@ const createProviderHandler = (predicate: (p: string) => boolean, handler: Track
 });
 
 const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }> = [
-  createProviderHandler(isViettelPost, (codes) => viettelPostTrackingShipment(codes)),
-  createProviderHandler(isSPX, (codes, p) => trackingShipment(`https://spx.vn/track?${codes}`, p)),
-  createProviderHandler(isGiaoHangNhanh, (codes, p) => trackingShipment(`https://donhang.ghn.vn/?order_code=${codes}`, p)),
-  createProviderHandler(isYunExpress, (codes, p) => trackingShipment(`https://www.yuntrack.com/parcelTracking?id=${codes}`, p)),
-  createProviderHandler(isOnTrac, (codes, p) => trackingShipment(`https://www.ontrac.com/tracking/?number=${codes}`, p)),
-  createProviderHandler(isYW, (codes) => ywTrackingShipment({ codes })),
-  createProviderHandler(isJTExpress, (codes) => jntShipmentTrackingShipment(codes)),
-  createProviderHandler(isUSPS, (codes) => uspsTrackingShipment({ codes })),
-  createProviderHandler(isVnPost, (codes) => vnPostTrackingShipment(codes)),
-  createProviderHandler(isBestExpress, (codes) => bestExpressTrackingShipment(codes)),
-  createProviderHandler(isUNIUNI, (codes) => uniTrackingShipment({ codes })),
-  createProviderHandler(isEVRI, (codes) => evriTrackingShipment({ codes })),
-  createProviderHandler(isASENDIA, (codes, p) => trackingShipment(`https://track.asendia.com/track/${codes}`, p)),
-  createProviderHandler(isSingPost, (codes) => singPostTrackingShipment({ codes })),
-  createProviderHandler(isDHL, (codes) => dhlTrackingShipment({ codes })),
-  createProviderHandler(isGofo, (codes) => gofoTrackingShipment({ codes })),
-  createProviderHandler(isAustraliaPost, (codes) => australiaPostTrackingShipment(codes)),
-  createProviderHandler(isUPS, (codes) => upsTrackingShipment({ codes })),
+  createProviderHandler(isViettelPost, ({ codes }) => viettelPostTrackingShipment(codes)),
+  createProviderHandler(isSPX, ({ codes, provider}) => trackingShipment(`https://spx.vn/track?${codes}`, provider)),
+  createProviderHandler(isGiaoHangNhanh, ({ codes, provider }) => trackingShipment(`https://donhang.ghn.vn/?order_code=${codes}`, provider)),
+  createProviderHandler(isYunExpress, ({ codes, provider }) => trackingShipment(`https://www.yuntrack.com/parcelTracking?id=${codes}`, provider)),
+  createProviderHandler(isOnTrac, ({ codes, provider }) => trackingShipment(`https://www.ontrac.com/tracking/?number=${codes}`, provider)),
+  createProviderHandler(isYW, ({ codes }) => ywTrackingShipment({ codes })),
+  createProviderHandler(isJTExpress, ({ codes, bankAccountName }) => jntShipmentTrackingShipment({ codes, bankAccountName })),
+  createProviderHandler(isUSPS, ({ codes }) => uspsTrackingShipment({ codes })),
+  createProviderHandler(isVnPost, ({ codes }) => vnPostTrackingShipment(codes)),
+  createProviderHandler(isBestExpress, ({ codes }) => bestExpressTrackingShipment(codes)),
+  createProviderHandler(isUNIUNI, ({ codes }) => uniTrackingShipment({ codes })),
+  createProviderHandler(isEVRI, ({ codes }) => evriTrackingShipment({ codes })),
+  createProviderHandler(isASENDIA, ({ codes, provider }) => trackingShipment(`https://track.asendia.com/track/${codes}`, provider)),
+  createProviderHandler(isSingPost, ({ codes }) => singPostTrackingShipment({ codes })),
+  createProviderHandler(isDHL, ({ codes }) => dhlTrackingShipment({ codes })),
+  createProviderHandler(isGofo, ({ codes }) => gofoTrackingShipment({ codes })),
+  createProviderHandler(isAustraliaPost, ({ codes }) => australiaPostTrackingShipment(codes)),
+  createProviderHandler(isUPS, ({ codes }) => upsTrackingShipment({ codes })),
 ];
 
-async function getTrackingResult(provider: string, codes: string): Promise<{ status: string; buffer: Buffer } | null> {
+async function getTrackingResult({ codes, provider, bankAccountName }: { codes: string; provider: string; bankAccountName?: string }): Promise<{ status: string; buffer: Buffer } | null> {
   const handlerConfig = handlers.find(h => h.check(provider));
   if (handlerConfig) {
-    return handlerConfig.handle(codes, provider);
+    return handlerConfig.handle({ codes, provider, bankAccountName });
   }
   return null;
 }
@@ -85,7 +84,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   console.log(`🚀 [TRACKING IMAGE] Starting request at ${new Date().toISOString()}`);
 
   try {
-    const { provider, codes }: TrackingQuery = req.body;
+    const { provider, codes, bankAccountName }: TrackingQuery = req.body;
 
     if (!provider || !codes) {
       console.log(`❌ [TRACKING IMAGE] Missing provider or codes parameter`);
@@ -95,7 +94,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     console.log(`📦 [TRACKING IMAGE] Processing ${provider} tracking code: ${codes}`);
 
-    const result = await getTrackingResult(provider, codes);
+    const result = await getTrackingResult({ provider, codes, bankAccountName });
 
     if (!result) {
       console.log(`❌ [TRACKING IMAGE] Unsupported provider: ${provider}`);

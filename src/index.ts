@@ -6,7 +6,7 @@ import morgan from 'morgan';
 
 import path from 'node:path';
 import { env } from './helpers';
-import { proxyManager } from './helpers/proxy/proxyManager';
+import { proxyManager } from './helpers/proxy';
 import { apiKeyAuth } from './middleware/apiKeyAuth';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';

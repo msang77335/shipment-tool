@@ -42,7 +42,8 @@
     "puppeteer": "^24.32.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-recaptcha": "^3.6.8",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",

@@ -1,6 +1,6 @@
 import { Browser, BrowserContext } from 'playwright';
 import RecaptchaPlugin from 'puppeteer-extra-plugin-recaptcha';
-import { proxyManager } from '../proxy/proxyManager';
+import { proxyManager } from '../proxy';
 import { env } from '../env';
 const { firefox } = require('playwright-extra')
 

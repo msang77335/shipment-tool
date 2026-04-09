@@ -25,7 +25,7 @@ export {
 } from './geminiApiKeyRotator';
 
 // Proxy Manager (includes blacklist tracking)
-export { proxyManager, type ProxyInfo } from './proxy/proxyManager';
+export { proxyManager, type ProxyInfo } from './proxy';
 
 export function isUSPS(providerStr: string) {
   return providerStr.toUpperCase().includes('USPS');
@@ -66,7 +66,7 @@ export function isYunExpress(providerStr: string) {
 
 export function isYW(providerStr: string) {
   const upperStr = providerStr.toUpperCase();
-  return upperStr.includes('YW');
+  return upperStr.includes('YW') || upperStr.includes('YANWEN');
 }
 
 export function isOnTrac(providerStr: string) {

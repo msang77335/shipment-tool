@@ -22,9 +22,8 @@ export abstract class CheckShop {
 export { LazadaCheckShop } from './lazadaCheckShop';
 
 import { LazadaCheckShop } from './lazadaCheckShop';
-import { ShopeeCheckShop } from './shopeeCheckShop';
 
-const shopCheckers: CheckShop[] = [new LazadaCheckShop(), new ShopeeCheckShop()];
+const shopCheckers: CheckShop[] = [new LazadaCheckShop()];
 
 export function checkShop(url: string): CheckShop | null {
   return shopCheckers.find((checker) => checker.matches(url)) ?? null;

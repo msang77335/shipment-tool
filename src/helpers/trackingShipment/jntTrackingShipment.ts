@@ -6,8 +6,8 @@ import { replace } from "lodash";
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
-import { env } from '../env';
-import { ProxyInfo, proxyManager } from '../proxy/proxyManager';
+import { phoneManager } from "../jnt/phone";
+import { ProxyInfo, proxyManager } from '../proxy';
 import { aftershipTrackingShipment } from "./aftershipTrackingShipment";
 const trackingUrl = "https://jtexpress.vn/vi/tracking";
 
@@ -37,11 +37,20 @@ const axiosclient = axios.create({
   validateStatus: () => true
 });
 
-const trackingJnTPage = async (codes: string) => {
-  const jntPhoneList = env.jntPhoneList ? env.jntPhoneList.split(',') : [];
+const trackingJnTPage = async ({ codes, bankAccountName }: { codes: string; bankAccountName?: string }) => {
+  const phoneList = phoneManager.getPhonesByName(bankAccountName || '') || [];
+  if (phoneList.length === 0) {
+    console.warn(`⚠️ [JNT TRACKING] No phones found for bank account name: "${bankAccountName}". Proceeding without phone numbers.`);
+    return {
+      success: false,
+      data: null,
+      error: `No phones available for bank account name: "${bankAccountName}". Please add phones to the pool or check the name.`
+    };
+  }
+  
   const proxyList = proxyManager.getAllProxies() ?? [];
   try {
-    const requests = jntPhoneList?.map(phone =>
+    const requests = phoneList?.map(phone =>
       processingTracking(phone.trim(), codes, proxyList[Math.floor(Math.random() * proxyList.length)])
     ) || [];
     const results = await Promise.all(requests);
@@ -104,12 +113,12 @@ const processingTracking = async (cellPhone: string, codes: string, proxy: Proxy
       const username = proxy.username?.trim();
       const password = proxy.password?.trim();
       let server = proxy.server?.trim();
-      
+
       // Validate all proxy components are non-empty
       if (username && password && server) {
         // Remove protocol prefix if present (proxy.server comes as "http://ip:port")
         server = server.replace(/^https?:\/\//, '');
-        
+
         const encodedUsername = encodeURIComponent(username);
         const encodedPassword = encodeURIComponent(password);
         const proxyUrl = `http://${encodedUsername}:${encodedPassword}@${server}`;
@@ -137,8 +146,8 @@ const processingTracking = async (cellPhone: string, codes: string, proxy: Proxy
   }
 };
 
-export const jntShipmentTrackingShipment = async (codes: string) => {
-  const trackingData = await trackingJnTPage(codes);
+export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { codes: string; bankAccountName?: string }) => {
+  const trackingData = await trackingJnTPage({ codes, bankAccountName });
   if (trackingData.success) {
     const overallStatus = determineOverallStatus(trackingData?.data ?? []);
     const buffer = await renderShipmentHtml({ success: trackingData?.success, data: trackingData.data ?? [] });

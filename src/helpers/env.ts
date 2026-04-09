@@ -38,21 +38,10 @@ export interface EnvConfig {
 
   // Proxy Services
   proxies: ProxyConfig[];
+
+  // Webshare Proxy Mode
   webshareApiKey?: string;
   webshareProxyMode: string;
-
-  // Shopee session cookies (JSON array of Playwright Cookie objects)
-  shopeeCookies?: string;
-
-  // Shopee login credentials
-  shopeeUsername?: string;
-  shopeePassword?: string;
-
-  // Shopee device fingerprint cookie
-  shopeeSpcF?: string;
-
-  // JNT Phone List
-  jntPhoneList?: string;
 }
 
 /**
@@ -86,31 +75,6 @@ function parseProxies(): ProxyConfig[] {
   return proxies;
 }
 
-/**
- * Parse JNT phone list from environment variable
- * Format: comma-separated list "phone1,phone2,phone3"
- * Example: "3942,0123456789"
- */
-function parseJntPhoneList(): string[] {
-  const jntPhoneEnv = process.env.JNT_PHONE_LIST || '';
-  
-  if (!jntPhoneEnv.trim()) {
-    console.log('📞 [JNT PHONE LIST] No phone numbers configured');
-    return [];
-  }
-  
-  const phoneList = jntPhoneEnv
-    .split(',')
-    .map(phone => phone.trim())
-    .filter(phone => phone.length > 0);
-  
-  console.log(`📞 [JNT PHONE LIST] Loaded ${phoneList.length} phone number(s)`);
-  phoneList.forEach((phone, index) => {
-    console.log(`   [${index + 1}] ${phone}`);
-  });
-  
-  return phoneList;
-}
 export function getEnv(): EnvConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
   
@@ -136,26 +100,9 @@ export function getEnv(): EnvConfig {
     // API Key for accessing the API
     xApiKey: process.env.X_API_KEY || undefined,
 
-    // Proxy Services
-    proxies: parseProxies(),
     webshareApiKey: process.env.WEBSHARE_API_KEY || undefined,
     webshareProxyMode: process.env.WEBSHARE_PROXY_MODE || 'direct',
-
-    // Shopee session cookies
-    shopeeCookies: process.env.SHOPEE_SESSION_COOKIES || undefined,
-
-    // Shopee login credentials
-    shopeeUsername: process.env.SHOPEE_USERNAME || undefined,
-    shopeePassword: process.env.SHOPEE_PASSWORD || undefined,
-
-    // Shopee device fingerprint cookie
-    shopeeSpcF: process.env.SHOPEE_SPC_F || undefined,
-
-    // JNT Phone List - parse and log during initialization
-    jntPhoneList: (() => {
-      parseJntPhoneList(); // Call to log the phone list
-      return process.env.JNT_PHONE_LIST || undefined;
-    })(),
+    proxies: parseProxies(),
   };
 }
 
@@ -196,4 +143,5 @@ console.log('✅ Environment configuration loaded:', {
   hasGeminiApiKey: !!env.geminiApiKey,
   hasBrowserlessApiToken: !!env.browserlessApiToken,
   hasXApiKey: !!env.xApiKey,
+  webShareApiKey: !!env.webshareApiKey,
 }); 

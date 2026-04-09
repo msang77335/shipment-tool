@@ -143,54 +143,10 @@ class ProxyManager {
   }
 
   /**
-   * Clear all blacklist entries
-   */
-  clearBlacklist(): void {
-    const count = this.blacklist.size;
-    this.blacklist.clear();
-    console.log(`🗑️  [BLACKLIST] Cleared all ${count} entries`);
-  }
-
-  /**
    * Generate unique key for blacklist entry
    */
   private getBlacklistKey(provider: string, proxyServer?: string): string {
     return proxyServer ? `${provider}:${proxyServer}` : provider;
-  }
-
-  /**
-   * Add a new proxy to the pool
-   */
-  addProxy(proxyInfo: ProxyInfo): { success: boolean; message: string; totalProxies: number } {
-    // Validate proxy format
-    if (!proxyInfo.server) {
-      return {
-        success: false,
-        message: 'Proxy server URL is required',
-        totalProxies: this.proxies.length
-      };
-    }
-
-    // Check if proxy already exists
-    const exists = this.proxies.some(p => p.server === proxyInfo.server);
-    if (exists) {
-      return {
-        success: false,
-        message: `Proxy ${proxyInfo.server} already exists`,
-        totalProxies: this.proxies.length
-      };
-    }
-
-    // Add proxy
-    this.proxies.push(proxyInfo);
-    const auth = proxyInfo.username ? ` (${proxyInfo.username})` : '';
-    console.log(`✅ [PROXY MANAGER] Added proxy: ${proxyInfo.server}${auth}`);
-
-    return {
-      success: true,
-      message: `Proxy ${proxyInfo.server} added successfully`,
-      totalProxies: this.proxies.length
-    };
   }
 
   /**
@@ -219,46 +175,6 @@ class ProxyManager {
       success: true,
       message: `Proxy ${proxyServer} removed successfully`,
       totalProxies: this.proxies.length
-    };
-  }
-
-  /**
-   * Remove all proxies that are currently in the blacklist
-   */
-  async removeBlacklistedProxies(): Promise<{
-    success: boolean;
-    message: string;
-    removed: ProxyInfo[];
-    remaining: number;
-  }> {
-    const blacklist = this.getBlacklist();
-    const blacklistedProxyServers = new Set<string>();
-
-    // Collect all blacklisted proxy servers
-    blacklist.forEach(entry => {
-      if (entry.proxyServer && entry.proxyServer !== 'N/A') {
-        blacklistedProxyServers.add(entry.proxyServer);
-      }
-    });
-
-    const removed: ProxyInfo[] = [];
-
-    // Remove each blacklisted proxy
-    for (const proxyServer of blacklistedProxyServers) {
-      const proxy = this.proxies.find(p => p.server === proxyServer);
-      if (proxy) {
-        await this.removeProxy(proxyServer);
-        removed.push(proxy);
-      }
-    }
-
-    console.log(`✅ [PROXY MANAGER] Removed ${removed.length} blacklisted proxies`);
-
-    return {
-      success: true,
-      message: `Removed ${removed.length} blacklisted proxies`,
-      removed,
-      remaining: this.proxies.length
     };
   }
 
@@ -364,13 +280,6 @@ class ProxyManager {
       reloadedCount,
       totalProxies: this.proxies.length
     };
-  }
-
-  /**
-   * Get proxy by server URL
-   */
-  getProxyByServer(proxyServer: string): ProxyInfo | undefined {
-    return this.proxies.find(p => p.server === proxyServer);
   }
 
   /**
