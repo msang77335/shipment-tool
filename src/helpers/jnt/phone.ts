@@ -103,11 +103,14 @@ class JNTPhoneManager {
     try {
       const phones = this.getAllPhones().flatMap(info => info.phones);
       const proxies = proxyManager.getAllProxies();
-      if (phones.length === 0) {
-        throw new Error('No phones available in the pool');
+      if(proxies.length === 0) {
+        console.warn('⚠️ [JNT PHONE] No proxies available for scanning');
+        return {
+          phone: '',
+          status: 'error: no proxies available'
+        }
       }
-
-      const phoneBruteForceFinder = new PhoneBruteForceFinder(proxies);
+      const phoneBruteForceFinder = new PhoneBruteForceFinder();
 
       const phonesResult = await phoneBruteForceFinder.findPhone(codes, phones);
 

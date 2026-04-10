@@ -22,6 +22,10 @@ services:
       - BROWSERLESS_API_TOKEN=${BROWSERLESS_API_TOKEN:-}
       # Api key for accessing the API
       - X_API_KEY=${X_API_KEY:-}
+      # Proxy list for browser contexts
+      - PROXY_LIST=${PROXY_LIST:-}
+      # Webshare API key for proxy management
+      - WEBSHARE_API_KEY=${WEBSHARE_API_KEY:-}
     volumes:
       # Hot reload support
       - ./src:/app/src

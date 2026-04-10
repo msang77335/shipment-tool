@@ -140,6 +140,57 @@ router.post('/replace-proxies', async (req: Request, res: Response): Promise<voi
   }
 });
 
+/**
+ * POST /api/v1/proxy/replace-blacklist-proxies
+ * Replace blacklisted proxies via Webshare API and reload the proxy pool
+ * Automatically identifies blacklisted proxies in the pool, calls Webshare API to replace them,
+ * removes old blacklisted proxies from pool, and reloads new proxies from Webshare
+ * 
+ * Body: {
+ *  dryRun?: boolean            // Optional: performs dry run without actual replacement (default: true)
+ * }
+ */
+router.post('/replace-blacklist-proxies', async (req: Request, res: Response): Promise<void> => {
+  const { dryRun = true } = req.body;
+  try {
+    const result = await proxyManager.replaceProxiesAutomatic(1, dryRun);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+        data: {
+          removedProxies: result.removedProxies.map(p => ({
+            server: p.server,
+            username: p.username || 'N/A'
+          })),
+          newProxies: result.newProxies.map(p => ({
+            server: p.server,
+            username: p.username || 'N/A',
+            password: p.password ? '***' : 'N/A',
+            bypass: p.bypass || 'N/A'
+          })),
+          reloadedCount: result.reloadedCount,
+          totalProxies: result.totalProxies,
+          webshareResponse: result.webshareResponse
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.message,
+        details: result.error
+      });
+    }
+  } catch (error: any) {
+    console.error('❌ [WEBSHARE] Error replacing blacklisted proxies:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to replace blacklisted proxies'
+    });
+  }
+})
+
 // =============================================================================
 // CHECK QUOTA
 // =============================================================================
@@ -198,7 +249,7 @@ router.post('/check-quota', async (req: Request, res: Response): Promise<void> =
     res.send(Buffer.from(screenshot));
   } catch (error: any) {
     console.error('❌ [CHECK-QUOTA] Error checking quota:', error);
-    
+
     let errorScreenshot = null;
     if (page?.isClosed?.() === false) {
       try {

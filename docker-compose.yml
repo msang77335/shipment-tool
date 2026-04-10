@@ -28,6 +28,12 @@ services:
       - PROXY_LIST=${PROXY_LIST:-}
       # Webshare API key for proxy management
       - WEBSHARE_API_KEY=${WEBSHARE_API_KEY:-}
+    healthcheck:
+      # Simple health check that calls the API endpoint to refresh the proxy blacklist
+      test: ["CMD", "curl", "-f", "-X", "POST", "-H", "x-api-key: ${X_API_KEY}", "http://localhost:9066/api/v1/proxy/replace-blacklist-proxies"]
+      interval: 300s
+      timeout: 10s
+      start_period: 60s
 networks:
   automation-net:
     driver: bridge

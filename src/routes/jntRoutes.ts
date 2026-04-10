@@ -8,7 +8,6 @@
  */
 
 import { Request, Response, Router } from 'express';
-import { proxyManager } from '../helpers';
 import { phoneManager } from '../helpers/jnt/phone';
 import { PhoneBruteForceFinder } from '../helpers/jnt/scanPhone';
 import { scanPhoneJobManager } from '../helpers/jnt/scanPhoneJobManager';
@@ -87,7 +86,7 @@ router.post('/phone', (req: Request, res: Response) => {
  */
 router.post('/scan-phone', async (req: Request, res: Response) => {
   try {
-    const { codes } = req.body;
+    const { codes, startFrom } = req.body;
 
     if (!codes || typeof codes !== 'string') {
       return res.status(400).json({
@@ -120,12 +119,10 @@ router.post('/scan-phone', async (req: Request, res: Response) => {
           return;
         }
 
-        // Initialize phone brute force finder with proxies
-        const proxies = proxyManager.getAllProxies();
-        const finder = new PhoneBruteForceFinder(proxies);
+        const finder = new PhoneBruteForceFinder();
 
         // Run the scan
-        const result = await finder.findPhone(codes, phoneList);
+        const result = await finder.findPhone(codes, phoneList, startFrom);
 
         // Save result
         scanPhoneJobManager.setSuccess(job.id, result);
