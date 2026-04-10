@@ -95,7 +95,8 @@
 
         .tracking-event {
             display: flex;
-            gap: 16px;
+            flex-direction: column;
+            gap: 8px;
             padding: 16px 0;
             border-bottom: 1px solid #f0f0f0;
         }
@@ -106,27 +107,26 @@
 
         .event-datetime {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
-            min-width: 180px;
-            flex-shrink: 0;
+            flex-direction: row;
+            gap: 16px;
+            align-items: center;
         }
 
         .event-time {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #888;
         }
 
         .event-date {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            font-weight: 600;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: 500;
             color: #FF0000;
         }
 
@@ -277,8 +277,8 @@
                 const events = shipment.history || [];
                 console.log(`Shipment ${shipmentIndex} (${shipment.trackingNumber}):`, { eventCount: events.length, isSingleShipment });
                 
-                // If single shipment, show all events; if multiple, show only first event
-                const eventsToDisplay = isSingleShipment ? events : events?.slice(0, 1);
+                // If single shipment, show all events; if multiple, show only the first two events
+                const eventsToDisplay = isSingleShipment ? events : events?.slice(0, 2);
                 
                 const eventsHtml = eventsToDisplay?.map((event, index) => {
                     const formatted = formatStatusWithHighlights(
@@ -290,6 +290,10 @@
 
                     return `
                         <div class="tracking-event">
+                            <div>
+                                <div class="event-status">${formatted}</div>
+                                ${details}
+                            </div>
                             <div class="event-datetime">
                                 <div class="event-time">
                                     <span class="icon">⏱️</span>
@@ -299,10 +303,6 @@
                                     <span class="icon">📅</span>
                                     ${event.date || 'N/A'}
                                 </div>
-                            </div>
-                            <div>
-                                <div class="event-status">${formatted}</div>
-                                ${details}
                             </div>
                         </div>
                     `;
