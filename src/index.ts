@@ -7,6 +7,7 @@ import morgan from 'morgan';
 import path from 'node:path';
 import { env } from './helpers';
 import { proxyManager } from './helpers/proxy';
+import { scheduler } from './helpers/scheduler';
 import { apiKeyAuth } from './middleware/apiKeyAuth';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
@@ -79,8 +80,13 @@ app.use(errorHandler);
     console.log(`⚠️  API Key authentication is DISABLED (no X_API_KEY configured)`);
   }
 
-// Initialize Webshare proxies before accepting traffic (no-op if key absent)
-proxyManager.initializeWebshare().then(() => {
+// Initialize proxies: load from DB first, then try Webshare API
+proxyManager.loadFromDatabase().then(async () => {
+  await proxyManager.initializeWebshare();
+  
+  // Start scheduled jobs
+  scheduler.start();
+
   const server = app.listen(PORT, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
     console.log(`📊 Health check available at http://localhost:${PORT}/health`);
@@ -89,7 +95,7 @@ proxyManager.initializeWebshare().then(() => {
   // Set server timeout to 5 minutes
   server.setTimeout(300000);
 }).catch(err => {
-  console.error('❌ Failed to initialize Webshare proxies:', err);
+  console.error('❌ Failed to initialize proxies:', err);
   process.exit(1);
 });
 

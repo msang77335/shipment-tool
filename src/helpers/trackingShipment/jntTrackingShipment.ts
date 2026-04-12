@@ -39,7 +39,7 @@ const axiosclient = axios.create({
 });
 
 const trackingJnTPage = async ({ codes, bankAccountName }: { codes: string; bankAccountName?: string }) => {
-  const phoneList = phoneManager.getPhonesByName(bankAccountName || '') || [];
+  const phoneList = await phoneManager.getPhonesByName(bankAccountName || '') || [];
   if (phoneList.length === 0) {
     console.warn(`⚠️ [JNT TRACKING] No phones found for bank account name: "${bankAccountName}". Proceeding without phone numbers.`);
     return {
@@ -153,13 +153,13 @@ export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { 
     const overallStatus = determineOverallStatus(trackingData?.data ?? []);
     const buffer = await renderShipmentHtml({ success: trackingData?.success, data: trackingData.data ?? [] });
     console.log(`✅ [J&T TRACKING] Tracking completed for codes: ${codes}, Overall Status: ${overallStatus}, Image Size: ${buffer.length} bytes`);
-    trackingHistManager.addHist(codes, bankAccountName ?? '', "J&T");
+    await trackingHistManager.addHist(codes, bankAccountName ?? '', "J&T");
     return {
       status: overallStatus,
       buffer: buffer
     };
   } else {
-    trackingHistManager.addHist(codes, bankAccountName ?? '', "AfterShip");
+    await trackingHistManager.addHist(codes, bankAccountName ?? '', "AfterShip");
     return aftershipTrackingShipment({ codes, provider: "J&T" });
   }
 };
@@ -194,7 +194,7 @@ function determineOverallStatus(shipments: any[]): string {
 export const renderShipmentHtml = async (trackingData: { success: boolean; data: any[] }): Promise<Buffer> => {
   let page;
   try {
-    const templatePath = join(__dirname, '../../templates', 'jnt-tracking.html');
+    const templatePath = join(__dirname, '../../../templates', 'jnt-tracking.html');
     let htmlTemplate = readFileSync(templatePath, 'utf-8');
 
     // Inject shipment data as JSON

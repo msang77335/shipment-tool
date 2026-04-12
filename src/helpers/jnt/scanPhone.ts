@@ -24,10 +24,12 @@ export class PhoneBruteForceFinder {
   private languages: string[];
   private headers: Record<string, string>;
   private client: AxiosInstance;
+  private onProgressCallback?: (attemptCount: number) => Promise<void>;
 
-  constructor() {
+  constructor(onProgressCallback?: (attemptCount: number) => Promise<void>) {
     this.currentProxyIndex = 0;
     this.attemptCount = 0;
+    this.onProgressCallback = onProgressCallback;
 
     // User-Agent rotation list
     this.userAgents = [
@@ -244,7 +246,7 @@ export class PhoneBruteForceFinder {
       }
 
       this.attemptCount++;
-      this.logBruteForceProgress();
+      await this.logBruteForceProgress();
 
       await new Promise(resolve => setTimeout(resolve, this.getRandomDelay()));
     }
@@ -254,10 +256,20 @@ export class PhoneBruteForceFinder {
 
   /**
    * Log progress during brute force search
+   * Also calls progress callback to update database in real-time
    */
-  private logBruteForceProgress(): void {
+  private async logBruteForceProgress(): Promise<void> {
     if (this.attemptCount % 100 === 0) {
       console.log(`   ⏱️  Attempted ${this.attemptCount} combinations...`);
+      
+      // Update database with current progress
+      if (this.onProgressCallback) {
+        try {
+          await this.onProgressCallback(this.attemptCount);
+        } catch (error) {
+          console.error(`⚠️ [BRUTE FORCE] Failed to update progress:`, error);
+        }
+      }
     }
   }
 
@@ -272,7 +284,7 @@ export class PhoneBruteForceFinder {
 
   /**
     * Main function to find valid phone numbers for a given tracking code
-    * @returns {Promise<Object>} Result with valid phones and status
+    * @returns {Promise<Object>} Result with valid phones and attempt count
    */
   async findPhone(
     billcode: string,
@@ -283,10 +295,12 @@ export class PhoneBruteForceFinder {
     status: string;
     billcode: string;
     validPhones: string;
+    attemptCount: number;
   }> {
     let validPhonesSet: Set<string>;
 
     if (startFrom === 0) {
+      console.log(`🔍 Starting phone scan for billcode: ${billcode} with provided phones...`);
       validPhonesSet = await this.checkProvidedPhones(billcode, phones);
       if (validPhonesSet.size  === 0) {
         console.log(`   🔍 No valid phones found in provided list, starting brute-force search...`);
@@ -301,7 +315,8 @@ export class PhoneBruteForceFinder {
     return {
       status: 'success',
       billcode: billcode,
-      validPhones: Array.from(validPhonesSet).join(', ')
+      validPhones: Array.from(validPhonesSet).join(', '),
+      attemptCount: this.attemptCount
     };
   }
 }

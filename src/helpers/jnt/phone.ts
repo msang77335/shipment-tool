@@ -1,11 +1,13 @@
 /**
  * JNT Phone Manager - Manages a pool of phone numbers for JNT tracking
  * Supports: add phones, list phones
+ * Backend: SQLite database for persistent storage
  */
 
 import { replace } from "lodash";
 import { proxyManager } from "../proxy";
 import { PhoneBruteForceFinder } from "./scanPhone";
+import { jntPhonesDb } from "../../database/jntPhones";
 
 export interface JNTPhoneInfo {
   phones: string[];
@@ -13,27 +15,46 @@ export interface JNTPhoneInfo {
 }
 
 class JNTPhoneManager {
-  private phones: { [name: string]: string[] } = {};
+  private initialized: boolean = false;
 
   /**
-   * Get all current phone numbers
+   * Initialize database on first use
    */
-  getAllPhones(): JNTPhoneInfo[] {
-    return Object.entries(this.phones).map(([name, phones]) => ({
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initialized) {
+      await jntPhonesDb.initialize();
+      this.initialized = true;
+    }
+  }
+
+  /**
+   * Get all current phone numbers grouped by name
+   */
+  async getAllPhones(): Promise<JNTPhoneInfo[]> {
+    await this.ensureInitialized();
+    const grouped = await jntPhonesDb.getAllGroupedByName();
+    
+    return Array.from(grouped.entries()).map(([name, phones]) => ({
       name,
       phones
     }));
   }
 
-  getPhonesByName(name: string): string[] | null {
+  /**
+   * Get phones by name
+   */
+  async getPhonesByName(name: string): Promise<string[] | null> {
+    await this.ensureInitialized();
     const normalizedName = replace(name.trim().toLowerCase(), /\s+/g, '').trim();
-    return this.phones[normalizedName] || null;
+    return await jntPhonesDb.getPhonesByName(normalizedName);
   }
 
   /**
    * Add a single phone number to the pool
    */
-  addPhone(phone: string, name: string): JNTPhoneInfo {
+  async addPhone(phone: string, name: string): Promise<JNTPhoneInfo> {
+    await this.ensureInitialized();
+    
     // Validate phone format
     if (!phone || phone.trim().length === 0) {
       throw new Error('Phone number cannot be empty');
@@ -44,28 +65,21 @@ class JNTPhoneManager {
     }
 
     const normalizedName = replace(name.trim().toLowerCase(), /\s+/g, '').trim();
+    
+    await jntPhonesDb.addEntry(normalizedName, phone);
+    
+    const phones = await jntPhonesDb.getPhonesByName(normalizedName);
+    console.log(`✅ [JNT PHONE] Added phone: ${phone} under name: ${name} (Total: ${phones?.length || 0})`);
 
-    // Check if phone already exists in this name group
-    if (!this.phones[normalizedName]) {
-      this.phones[normalizedName] = [];
-    }
-
-    // Avoid duplicates within the same name group
-    if (this.phones[normalizedName].includes(phone)) {
-      console.warn(`⚠️ [JNT PHONE] Phone ${phone} already exists under name: ${name}`);
-      return { name, phones: this.phones[normalizedName] };
-    }
-
-    this.phones[normalizedName].push(phone);
-    console.log(`✅ [JNT PHONE] Added phone: ${phone} under name: ${name} (Total: ${this.phones[normalizedName].length})`);
-
-    return { name, phones: this.phones[normalizedName] };
+    return { name, phones: phones || [] };
   }
 
   /**
    * Add multiple phone numbers to the pool
    */
-  addPhones(phoneInfo: JNTPhoneInfo[]): JNTPhoneInfo[] {
+  async addPhones(phoneInfo: JNTPhoneInfo[]): Promise<JNTPhoneInfo[]> {
+    await this.ensureInitialized();
+    
     const addedPhones: JNTPhoneInfo[] = [];
     const errors: Array<{ entry: JNTPhoneInfo; error: string }> = [];
 
@@ -75,7 +89,7 @@ class JNTPhoneManager {
         const phonesToAdd = Array.isArray(phoneData.phones) ? phoneData.phones : [phoneData.phones];
 
         for (const phone of phonesToAdd) {
-          const result = this.addPhone(phone, phoneData.name);
+          const result = await this.addPhone(phone, phoneData.name);
 
           // Track the result only once per name (to avoid duplicates in response)
           if (!addedPhones.some(p => p.name === result.name)) {
@@ -89,8 +103,8 @@ class JNTPhoneManager {
       }
     }
 
-    const totalNames = Object.keys(this.phones).length;
-    console.log(`📱 [JNT PHONE] Added ${addedPhones.length} name groups, total names: ${totalNames}`);
+    const stats = await jntPhonesDb.getStats();
+    console.log(`📱 [JNT PHONE] Added ${addedPhones.length} name groups, total: ${stats.totalPhones} phones in ${stats.totalNames} names`);
 
     if (errors.length > 0) {
       console.warn(`⚠️ [JNT PHONE] ${errors.length} entries failed to add`);
@@ -101,8 +115,11 @@ class JNTPhoneManager {
 
   async scanPhone(codes: string): Promise<{ phone: string; status: string }> {
     try {
-      const phones = this.getAllPhones().flatMap(info => info.phones);
+      await this.ensureInitialized();
+      
+      const allPhones = await jntPhonesDb.getAllPhones();
       const proxies = proxyManager.getAllProxies();
+      
       if(proxies.length === 0) {
         console.warn('⚠️ [JNT PHONE] No proxies available for scanning');
         return {
@@ -110,9 +127,18 @@ class JNTPhoneManager {
           status: 'error: no proxies available'
         }
       }
+      
+      if (allPhones.length === 0) {
+        console.warn('⚠️ [JNT PHONE] No phones available for scanning');
+        return {
+          phone: '',
+          status: 'error: no phones available'
+        }
+      }
+      
       const phoneBruteForceFinder = new PhoneBruteForceFinder();
 
-      const phonesResult = await phoneBruteForceFinder.findPhone(codes, phones);
+      const phonesResult = await phoneBruteForceFinder.findPhone(codes, allPhones);
 
       if (phonesResult.validPhones) {
         console.log(`   ✅ Valid phones found: ${phonesResult.validPhones}`);

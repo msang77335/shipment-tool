@@ -6,7 +6,6 @@ import { PlaywrightBrowserSingleton } from '../browser/PlaywrightBrowserSingleto
 
 export async function viettelPostTrackingShipment(code?: string): Promise<{ status: string; buffer: Buffer }> {
   const resp = await getTrackingData(code);
-  console.log(`📦 [VIETTEL POST] Full API response:`, JSON.stringify(resp, null, 2));
 
   if (String(resp?.data?.error) === 'true') {
     console.log(`❌ [SCREENSHOT] Viettel Post API returned error for codes: ${code}`);
@@ -15,7 +14,6 @@ export async function viettelPostTrackingShipment(code?: string): Promise<{ stat
 
   // Extract the first order data from nested structure
   const orderData = resp?.data?.[0] || resp?.data || {};
-  console.log(`📦 [VIETTEL POST] Extracted order data:`, JSON.stringify(orderData, null, 2));
 
   // Extract and map status
   const rawStatus = orderData.TRANGTHAI || 'UNKNOWN';

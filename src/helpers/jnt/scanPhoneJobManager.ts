@@ -1,187 +1,175 @@
 /**
  * Job Manager - Manages background scan phone jobs
- * Stores results locally in JSON files
+ * Stores results in SQLite database
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { scanPhoneJobsDb, type ScanPhoneJobEntry } from '../../database/scanPhoneJobs';
+
+type JobStatus = 'pending' | 'processing' | 'paused' | 'success' | 'error';
 
 export interface ScanPhoneJob {
   id: string;
   codes: string;
-  status: 'pending' | 'processing' | 'success' | 'error';
+  status: JobStatus;
   result?: {
     status: string;
     billcode: string;
     validPhones: string;
+    attemptCount?: number;
   };
   error?: string;
-  createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
+  attemptCount?: number;
+  createdAt: number;
+  startedAt?: number;
+  completedAt?: number;
 }
 
 class ScanPhoneJobManager {
-  private jobsDir: string;
+  private initialized: boolean = false;
 
-  constructor() {
-    this.jobsDir = path.join(process.cwd(), 'data', 'scan_jobs');
-    
-    // Create jobs directory if it doesn't exist
-    if (!fs.existsSync(this.jobsDir)) {
-      fs.mkdirSync(this.jobsDir, { recursive: true });
-      console.log(`📁 [SCAN JOBS] Created jobs directory: ${this.jobsDir}`);
+  /**
+   * Initialize database on first use
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initialized) {
+      await scanPhoneJobsDb.initialize();
+      this.initialized = true;
     }
   }
 
   /**
    * Create a new scan phone job
    */
-  createJob(codes: string): ScanPhoneJob {
-    const job: ScanPhoneJob = {
-      id: randomUUID(),
-      codes,
-      status: 'pending',
-      createdAt: new Date().toISOString()
+  async createJob(codes: string): Promise<ScanPhoneJob> {
+    await this.ensureInitialized();
+    const entry = await scanPhoneJobsDb.createJob(codes);
+    
+    return {
+      id: entry.id!,
+      codes: entry.codes,
+      status: entry.status as JobStatus,
+      createdAt: entry.createdAt!
     };
-
-    this.saveJob(job);
-    console.log(`✅ [SCAN JOBS] Created job ${job.id} for codes: ${codes}`);
-
-    return job;
   }
 
   /**
    * Get job by ID
    */
-  getJob(jobId: string): ScanPhoneJob | null {
-    try {
-      const filePath = this.getJobFilePath(jobId);
-      
-      if (!fs.existsSync(filePath)) {
-        console.warn(`⚠️ [SCAN JOBS] Job ${jobId} not found`);
-        return null;
-      }
-
-      const data = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(data);
-    } catch (error) {
-      console.error(`❌ [SCAN JOBS] Error retrieving job ${jobId}:`, error);
+  async getJob(jobId: string): Promise<ScanPhoneJob | null> {
+    await this.ensureInitialized();
+    const entry = await scanPhoneJobsDb.getJob(jobId);
+    
+    if (!entry) {
+      console.warn(`⚠️ [SCAN JOBS] Job ${jobId} not found`);
       return null;
     }
+
+    return {
+      id: entry.id!,
+      codes: entry.codes,
+      status: entry.status as JobStatus,
+      result: entry.result ? JSON.parse(entry.result) : undefined,
+      error: entry.error,
+      attemptCount: entry.attemptCount,
+      createdAt: entry.createdAt!,
+      startedAt: entry.startedAt,
+      completedAt: entry.completedAt
+    };
   }
 
   /**
    * Update job status to processing
    */
-  setProcessing(jobId: string): void {
-    const job = this.getJob(jobId);
-    if (!job) return;
-
-    job.status = 'processing';
-    job.startedAt = new Date().toISOString();
-    this.saveJob(job);
-    console.log(`⏳ [SCAN JOBS] Job ${jobId} status: processing`);
+  async setProcessing(jobId: string): Promise<void> {
+    await this.ensureInitialized();
+    await scanPhoneJobsDb.setProcessing(jobId);
   }
 
   /**
    * Mark job as completed with result
    */
-  setSuccess(jobId: string, result: ScanPhoneJob['result']): void {
-    const job = this.getJob(jobId);
-    if (!job) return;
-
-    job.status = 'success';
-    job.result = result;
-    job.completedAt = new Date().toISOString();
-    this.saveJob(job);
-    console.log(`✅ [SCAN JOBS] Job ${jobId} completed successfully`);
+  async setSuccess(jobId: string, result: ScanPhoneJob['result'], attemptCount?: number): Promise<void> {
+    await this.ensureInitialized();
+    await scanPhoneJobsDb.setSuccess(jobId, result, attemptCount);
   }
 
   /**
    * Mark job as failed with error
    */
-  setError(jobId: string, error: string): void {
-    const job = this.getJob(jobId);
-    if (!job) return;
-
-    job.status = 'error';
-    job.error = error;
-    job.completedAt = new Date().toISOString();
-    this.saveJob(job);
-    console.log(`❌ [SCAN JOBS] Job ${jobId} failed: ${error}`);
+  async setError(jobId: string, error: string): Promise<void> {
+    await this.ensureInitialized();
+    await scanPhoneJobsDb.setError(jobId, error);
   }
 
   /**
-   * List all jobs
+   * Update job progress (attempt count) in real-time during brute force
    */
-  listJobs(limit: number = 100): ScanPhoneJob[] {
-    try {
-      const files = fs.readdirSync(this.jobsDir)
-        .filter(f => f.endsWith('.json'))
-        .sort()
-        .reverse()
-        .slice(0, limit);
+  async updateProgress(jobId: string, attemptCount: number): Promise<void> {
+    await this.ensureInitialized();
+    await scanPhoneJobsDb.updateProgress(jobId, attemptCount);
+  }
 
-      return files
-        .map(f => this.getJob(f.replace('.json', '')))
-        .filter((job): job is ScanPhoneJob => job !== null);
-    } catch (error) {
-      console.error(`❌ [SCAN JOBS] Error listing jobs:`, error);
-      return [];
-    }
+  /**
+   * Pause a processing job
+   */
+  async pauseJob(jobId: string): Promise<void> {
+    await this.ensureInitialized();
+    await scanPhoneJobsDb.pauseJob(jobId);
+  }
+
+  /**
+   * Resume a paused job
+   */
+  async resumeJob(jobId: string): Promise<void> {
+    await this.ensureInitialized();
+    await scanPhoneJobsDb.resumeJob(jobId);
+  }
+
+  /**
+   * List all jobs with optional status filter
+   */
+  async listJobs(limit: number = 100, status?: JobStatus): Promise<ScanPhoneJob[]> {
+    await this.ensureInitialized();
+    const entries = await scanPhoneJobsDb.listJobs({ limit, status });
+
+    return entries.map((entry: ScanPhoneJobEntry) => ({
+      id: entry.id!,
+      codes: entry.codes,
+      status: entry.status as JobStatus,
+      result: entry.result ? JSON.parse(entry.result) : undefined,
+      error: entry.error,
+      attemptCount: entry.attemptCount,
+      createdAt: entry.createdAt!,
+      startedAt: entry.startedAt,
+      completedAt: entry.completedAt
+    }));
+  }
+
+  /**
+   * Get job statistics
+   */
+  async getStats(): Promise<{ total: number; pending: number; processing: number; success: number; error: number }> {
+    await this.ensureInitialized();
+    const counts = await scanPhoneJobsDb.getCountByStatus();
+
+    const countValues = Object.values(counts) as number[];
+    const total = countValues.reduce((sum, count) => sum + count, 0);
+
+    return {
+      total,
+      pending: counts['pending'] || 0,
+      processing: counts['processing'] || 0,
+      success: counts['success'] || 0,
+      error: counts['error'] || 0
+    };
   }
 
   /**
    * Clean up old jobs (older than specified days)
    */
-  cleanupOldJobs(days: number = 7): number {
-    try {
-      const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
-      const files = fs.readdirSync(this.jobsDir);
-      let deletedCount = 0;
-
-      for (const file of files) {
-        if (!file.endsWith('.json')) continue;
-
-        const filePath = path.join(this.jobsDir, file);
-        const stats = fs.statSync(filePath);
-
-        if (stats.mtimeMs < cutoffTime) {
-          fs.unlinkSync(filePath);
-          deletedCount++;
-        }
-      }
-
-      if (deletedCount > 0) {
-        console.log(`🗑️ [SCAN JOBS] Cleaned up ${deletedCount} old jobs (older than ${days} days)`);
-      }
-
-      return deletedCount;
-    } catch (error) {
-      console.error(`❌ [SCAN JOBS] Error cleaning up jobs:`, error);
-      return 0;
-    }
-  }
-
-  /**
-   * Private: Save job to file
-   */
-  private saveJob(job: ScanPhoneJob): void {
-    try {
-      const filePath = this.getJobFilePath(job.id);
-      fs.writeFileSync(filePath, JSON.stringify(job, null, 2));
-    } catch (error) {
-      console.error(`❌ [SCAN JOBS] Error saving job ${job.id}:`, error);
-    }
-  }
-
-  /**
-   * Private: Get job file path
-   */
-  private getJobFilePath(jobId: string): string {
-    return path.join(this.jobsDir, `${jobId}.json`);
+  async cleanupOldJobs(days: number = 7): Promise<number> {
+    await this.ensureInitialized();
+    return await scanPhoneJobsDb.cleanupOldJobs(days);
   }
 }
 
