@@ -45,9 +45,9 @@ class Scheduler {
   }
 
   // Schedule automatic proxy replacement from blacklist
-  // Runs every 5 minutes using cron pattern
+  // Runs every 4 hours using cron pattern
   private scheduleProxyReplacement(): void {
-    const CRON_PATTERN = '*/5 * * * *';
+    const CRON_PATTERN = '0 */4 * * *';
 
     console.log(`🔄 [SCHEDULER] Scheduling proxy replacement (${CRON_PATTERN})`);
 
