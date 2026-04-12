@@ -235,6 +235,15 @@ export class PhoneBruteForceFinder {
   ): Promise<Set<string>> {
     const validPhonesSet = new Set<string>();
 
+    // Update progress callback immediately at start
+    if (this.onProgressCallback) {
+      try {
+        await this.onProgressCallback(this.attemptCount);
+      } catch (error) {
+        console.error(`⚠️ [BRUTE FORCE] Failed to update progress:`, error);
+      }
+    }
+
     for (let i = startFrom; i < maxAttempts; i++) {
       const lastFourDigits = String(i).padStart(4, '0');
       const result = await this.checkPhoneValidity(billcode, lastFourDigits);
@@ -259,7 +268,8 @@ export class PhoneBruteForceFinder {
    * Also calls progress callback to update database in real-time
    */
   private async logBruteForceProgress(): Promise<void> {
-    if (this.attemptCount % 100 === 0) {
+    // Update every 20 attempts for more real-time feedback
+    if (this.attemptCount % 20 === 0) {
       console.log(`   ⏱️  Attempted ${this.attemptCount} combinations...`);
       
       // Update database with current progress
