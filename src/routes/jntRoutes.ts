@@ -213,7 +213,7 @@ router.post('/scan-phone', async (req: Request, res: Response) => {
         const finder = new PhoneBruteForceFinder(async (attemptCount) => {
           // Callback to update progress in real-time
           await scanPhoneJobManager.updateProgress(job.id, attemptCount);
-        }, 0);
+        }, Number.parseInt(startFrom) || 0);
 
         // Run the scan
         const result = await finder.findPhone(codes, phoneList, Number.parseInt(startFrom) || 0);

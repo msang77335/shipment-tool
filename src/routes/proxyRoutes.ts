@@ -5,12 +5,12 @@ const router = Router();
 
 /**
  * GET /api/v1/proxy
- * Get all proxies
+ * Get all proxies with statistics
  */
-router.get('/', (req: Request, res: Response): void => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const proxies = proxyManager.getAllProxies();
-    const stats = proxyManager.getProxyStats();
+    const stats = await proxyManager.getProxyStats();
 
     res.json({
       success: true,
