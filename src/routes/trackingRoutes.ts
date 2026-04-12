@@ -92,7 +92,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    console.log(`📦 [TRACKING IMAGE] Processing ${provider} tracking code: ${codes}`);
+    console.log(`📦 [TRACKING IMAGE] Processing ${provider} tracking code: ${codes} bank account: ${bankAccountName || 'N/A'}`);
 
     const result = await getTrackingResult({ provider, codes, bankAccountName });
 
