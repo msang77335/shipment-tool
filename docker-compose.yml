@@ -11,6 +11,8 @@ services:
       network1:
     ports:
       - "${PORT:-9066}:9066"
+    volumes:
+      - shipment-data:/app/data
     environment:
       - NODE_ENV=production
       - PORT=9066
@@ -34,3 +36,7 @@ networks:
   network1:
     name: dokploy-network
     external: true
+
+volumes:
+  shipment-data:
+    driver: local

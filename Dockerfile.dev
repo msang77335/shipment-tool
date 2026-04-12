@@ -1,44 +1,73 @@
 # =============================================
-# Development Dockerfile for Shipment Tracking API
-# With hot reload and debugging support
+# Stage 1: Builder (Debian-based - match production libc)
 # =============================================
+FROM node:20-bookworm-slim AS builder
 
-# ---- Stage 1: Dependencies ----
-FROM node:20-alpine AS deps
+# Install build tools for better-sqlite3 compilation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-
-# Install ALL dependencies (including devDependencies)
 RUN npm install
 
-# ---- Stage 2: Development ----
-FROM node:20-alpine AS dev
+COPY . .
+RUN npm run build
+
+# =============================================
+# Stage 2: Production (Bookworm - đủ libs cho Playwright)
+# =============================================
+FROM node:20-bookworm-slim AS production
+
+# Install Xvfb + Chrome system dependencies for Playwright & Puppeteer
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xvfb \
+    libnspr4 \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy installed node_modules from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-
-# Copy config files
+# Install production dependencies, Playwright Firefox, and Chrome for Puppeteer
 COPY package*.json ./
-COPY tsconfig.json ./
-COPY nodemon.json ./
+RUN npm install --omit=dev \
+    && npx playwright install --with-deps firefox \
+    && npx puppeteer browsers install chrome
 
-# Install Playwright browsers
-RUN npx playwright install firefox
+# Copy built app from builder stage
+COPY --from=builder /app/dist ./dist
 
-# Copy source code
-COPY . .
-
+# =========================
 # Expose port
+# =========================
 EXPOSE 9066
 
-# Set environment variables
-ENV NODE_ENV=development
+# =========================
+# Environment
+# =========================
 ENV DISPLAY=:99
+ENV NODE_ENV=production
 
-# Start Xvfb and development server with hot reload
-CMD ["sh", "-c", "Xvfb :99 -screen 0 1920x1080x24 & npm run dev"]
+# =========================
+# Start app
+# =========================
+CMD ["sh", "-c", "rm -f /tmp/.X99-lock && Xvfb :99 -screen 0 1280x720x24 & npm start"]
+

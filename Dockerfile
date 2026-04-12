@@ -1,7 +1,14 @@
 # =============================================
-# Stage 1: Builder (Alpine - nhẹ, chỉ build TS)
+# Stage 1: Builder (Debian-based - match production libc)
 # =============================================
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
+
+# Install build tools for better-sqlite3 compilation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
