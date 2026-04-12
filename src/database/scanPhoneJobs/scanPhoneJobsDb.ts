@@ -349,6 +349,34 @@ class ScanPhoneJobsDb {
   }
 
   /**
+   * Delete a job by ID
+   */
+  async deleteJob(jobId: string): Promise<boolean> {
+    if (!this.initialized) await this.initialize();
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const stmt = this.db.prepare(`
+        DELETE FROM ${DB_NAMES.SCAN_PHONE_JOBS}
+        WHERE id = ?
+      `);
+
+      const result = stmt.run(jobId) as any;
+      const deletedCount = result.changes;
+
+      if (deletedCount > 0) {
+        console.log(`🗑️ [SCAN PHONE JOBS DB] Job ${jobId} deleted`);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error(`❌ [SCAN PHONE JOBS DB] Error deleting job:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get job count by status
    */
   async getCountByStatus(): Promise<Record<string, number>> {

@@ -171,6 +171,14 @@ class ScanPhoneJobManager {
     await this.ensureInitialized();
     return await scanPhoneJobsDb.cleanupOldJobs(days);
   }
+
+  /**
+   * Delete a job by ID
+   */
+  async deleteJob(jobId: string): Promise<boolean> {
+    await this.ensureInitialized();
+    return await scanPhoneJobsDb.deleteJob(jobId);
+  }
 }
 
 export const scanPhoneJobManager = new ScanPhoneJobManager();

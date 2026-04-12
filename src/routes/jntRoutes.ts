@@ -439,6 +439,54 @@ router.put('/scan-phone/:id/resume', async (req: Request, res: Response) => {
 });
 
 /**
+ * DELETE /api/v1/jnt/scan-phone/:id
+ * Delete a scan job by ID
+ * Can delete jobs in any status (pending, processing, paused, success, error)
+ */
+router.delete('/scan-phone/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Job ID is required'
+      });
+    }
+
+    const job = await scanPhoneJobManager.getJob(id as string);
+
+    if (!job) {
+      return res.status(404).json({
+        status: 'error',
+        message: `Job ${id} not found`
+      });
+    }
+
+    // Delete the job
+    await scanPhoneJobManager.deleteJob(id as string);
+
+    return res.json({
+      status: 'success',
+      message: 'Job deleted successfully',
+      deletedJob: {
+        id: job.id,
+        codes: job.codes,
+        status: job.status,
+        createdAt: job.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('❌ [JNT ROUTE] Error deleting scan job:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to delete scan job',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
  * GET /api/v1/jnt/scan-phone
  * List recent scan phone jobs
  * Query: ?limit=100&status=pending|processing|paused|success|error
