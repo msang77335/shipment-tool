@@ -26,9 +26,9 @@ export class PhoneBruteForceFinder {
   private client: AxiosInstance;
   private onProgressCallback?: (attemptCount: number) => Promise<void>;
 
-  constructor(onProgressCallback?: (attemptCount: number) => Promise<void>) {
+  constructor(onProgressCallback?: (attemptCount: number) => Promise<void>, initialAttemptCount: number = 0) {
     this.currentProxyIndex = 0;
-    this.attemptCount = 0;
+    this.attemptCount = initialAttemptCount;
     this.onProgressCallback = onProgressCallback;
 
     // User-Agent rotation list

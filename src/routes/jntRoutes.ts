@@ -213,10 +213,10 @@ router.post('/scan-phone', async (req: Request, res: Response) => {
         const finder = new PhoneBruteForceFinder(async (attemptCount) => {
           // Callback to update progress in real-time
           await scanPhoneJobManager.updateProgress(job.id, attemptCount);
-        });
+        }, 0);
 
         // Run the scan
-        const result = await finder.findPhone(codes, phoneList, Number.parseInt(startFrom));
+        const result = await finder.findPhone(codes, phoneList, Number.parseInt(startFrom) || 0);
 
         // Save result with attemptCount
         await scanPhoneJobManager.setSuccess(job.id, result, result.attemptCount);
@@ -406,7 +406,7 @@ router.put('/scan-phone/:id/resume', async (req: Request, res: Response) => {
         const finder = new PhoneBruteForceFinder(async (attemptCount) => {
           // Callback to update progress in real-time
           await scanPhoneJobManager.updateProgress(id as string, attemptCount);
-        });
+        }, job.attemptCount || 0);
 
         // Resume from saved attempt count (continue brute force)
         const startFrom = Math.max(0, (job.attemptCount || 0));
