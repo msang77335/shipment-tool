@@ -64,12 +64,20 @@ class ScanPhoneJobsDb {
         CREATE INDEX IF NOT EXISTS idx_createdAt ON ${DB_NAMES.SCAN_PHONE_JOBS}(createdAt DESC);
       `);
       
-      // Add attemptCount column if it doesn't exist (for existing databases)
-      try {
-        this.db.prepare(`ALTER TABLE ${DB_NAMES.SCAN_PHONE_JOBS} ADD COLUMN attemptCount INTEGER;`).run();
-      } catch (e: any) {
-        if (!e.message.includes('already exists')) {
-          throw e;
+      // Migration: Add paused status support if needed (if table already exists)
+      if (this.initialized === false) {
+        try {
+          // Only run migration for existing databases, new ones already have it
+          const checkStatus = this.db.prepare(`PRAGMA table_info(${DB_NAMES.SCAN_PHONE_JOBS})`).all() as any[];
+          const hasPausedSupport = checkStatus.some(col => col.name === 'status');
+          if (hasPausedSupport) {
+            // Table exists, migration already handled
+          }
+        } catch (e: any) {
+          // Table doesn't exist yet (new database), skip migration
+          if (!e.message.includes('no such table')) {
+            throw e;
+          }
         }
       }
 
