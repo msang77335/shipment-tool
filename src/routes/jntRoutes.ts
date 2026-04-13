@@ -189,6 +189,9 @@ router.post('/scan-phone', async (req: Request, res: Response) => {
     // Create a new job
     const job = await scanPhoneJobManager.createJob(codes);
 
+    // Create abort signal for this job
+    const abortSignal = scanPhoneJobManager.createAbortSignal(job.id);
+
     // Start background processing (don't await)
     (async () => {
       try {
@@ -207,23 +210,32 @@ router.post('/scan-phone', async (req: Request, res: Response) => {
 
         if (phoneList.length === 0) {
           await scanPhoneJobManager.setError(job.id, 'No phones available in pool');
+          scanPhoneJobManager.cleanupSignal(job.id);
           return;
         }
 
         const finder = new PhoneBruteForceFinder(async (attemptCount) => {
           // Callback to update progress in real-time
           await scanPhoneJobManager.updateProgress(job.id, attemptCount);
-        }, Number.parseInt(startFrom) || 0);
+        }, Number.parseInt(startFrom) || 0, abortSignal);
 
         // Run the scan
         const result = await finder.findPhone(codes, phoneList, Number.parseInt(startFrom) || 0);
 
         // Save result with attemptCount
         await scanPhoneJobManager.setSuccess(job.id, result, result.attemptCount);
+        scanPhoneJobManager.cleanupSignal(job.id);
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        await scanPhoneJobManager.setError(job.id, errorMsg);
-        console.error(`❌ [JNT] Error in background scan job ${job.id}:`, error);
+        // Handle abort gracefully
+        if (error instanceof Error && error.message === 'JOB_ABORTED') {
+          console.log(`✅ [JNT] Job ${job.id} paused by user`);
+          // Status is already set to 'paused' by pauseJob()
+        } else {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          await scanPhoneJobManager.setError(job.id, errorMsg);
+          console.error(`❌ [JNT] Error in background scan job ${job.id}:`, error);
+        }
+        scanPhoneJobManager.cleanupSignal(job.id);
       }
     })();
 
@@ -385,6 +397,9 @@ router.put('/scan-phone/:id/resume', async (req: Request, res: Response) => {
     // Resume the job
     await scanPhoneJobManager.resumeJob(id as string);
 
+    // Create new abort signal for resumed job
+    const abortSignal = scanPhoneJobManager.createAbortSignal(id as string);
+
     // Start background processing with saved attemptCount as startFrom
     (async () => {
       try {
@@ -400,13 +415,14 @@ router.put('/scan-phone/:id/resume', async (req: Request, res: Response) => {
 
         if (phoneList.length === 0) {
           await scanPhoneJobManager.setError(id as string, 'No phones available in pool');
+          scanPhoneJobManager.cleanupSignal(id as string);
           return;
         }
 
         const finder = new PhoneBruteForceFinder(async (attemptCount) => {
           // Callback to update progress in real-time
           await scanPhoneJobManager.updateProgress(id as string, attemptCount);
-        }, job.attemptCount || 0);
+        }, job.attemptCount || 0, abortSignal);
 
         // Resume from saved attempt count (continue brute force)
         const startFrom = Math.max(0, (job.attemptCount || 0));
@@ -414,10 +430,18 @@ router.put('/scan-phone/:id/resume', async (req: Request, res: Response) => {
 
         // Save result with updated attemptCount
         await scanPhoneJobManager.setSuccess(id as string, result, result.attemptCount);
+        scanPhoneJobManager.cleanupSignal(id as string);
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        await scanPhoneJobManager.setError(id as string, errorMsg);
-        console.error(`❌ [JNT] Error in resumed scan job ${id}:`, error);
+        // Handle abort gracefully
+        if (error instanceof Error && error.message === 'JOB_ABORTED') {
+          console.log(`✅ [JNT] Resumed job ${id} paused by user`);
+          // Status is already set to 'paused' by pauseJob()
+        } else {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          await scanPhoneJobManager.setError(id as string, errorMsg);
+          console.error(`❌ [JNT] Error in resumed scan job ${id}:`, error);
+        }
+        scanPhoneJobManager.cleanupSignal(id as string);
       }
     })();
 
@@ -636,31 +660,16 @@ router.delete('/tracking-history', async (req: Request, res: Response) => {
  *   bypass?: string             // Optional: Proxy bypass
  * }
  */
-router.post('/check-quota', async (req: Request, res: Response): Promise<void> => {
+
+/**
+ * Helper function to perform quota check
+ */
+async function performQuotaCheck(proxyConfig: any) {
   let browser: any = null;
   let context: any = null;
   let page: any = null;
 
   try {
-    const { server, username, password, bypass } = req.body;
-
-    if (!server) {
-      res.status(400).json({
-        success: false,
-        error: 'Proxy server is required'
-      });
-      return;
-    }
-
-    console.log(`🔍 [CHECK-QUOTA] Starting quota check for proxy ${server}`);
-
-    const proxyConfig: any = {
-      server,
-      ...(username && { username }),
-      ...(password && { password }),
-      ...(bypass && { bypass })
-    };
-
     browser = await launchBrowserWithProxy(proxyConfig);
     const { context: ctx, page: pg } = await setupPageAndNavigate(browser);
     context = ctx;
@@ -675,21 +684,15 @@ router.post('/check-quota', async (req: Request, res: Response): Promise<void> =
     if (hasQuotaExceeded) {
       await proxyManager.addToBlacklist({
         provider: 'Quota Check',
-        proxyServer: server,
-        reason: hasQuotaExceeded ? 'QUOTA_EXCEEDED' : 'OTHER',
-        code: hasQuotaExceeded ? 'QUOTA_EXCEEDED' : 'UNKNOWN'
+        proxyServer: proxyConfig.server,
+        reason: 'QUOTA_EXCEEDED',
+        code: 'QUOTA_EXCEEDED'
       });
     }
 
     console.log(`✅ [CHECK-QUOTA] Screenshot captured successfully`);
-
-    res.type('image/png');
-    res.set('X-Proxy-Server', server);
-    res.set('X-Quota-Exceeded', hasQuotaExceeded.toString());
-    res.send(Buffer.from(screenshot));
+    return { screenshot, hasQuotaExceeded, error: null };
   } catch (error: any) {
-    console.error('❌ [CHECK-QUOTA] Error checking quota:', error);
-
     let errorScreenshot = null;
     if (page?.isClosed?.() === false) {
       try {
@@ -698,15 +701,47 @@ router.post('/check-quota', async (req: Request, res: Response): Promise<void> =
         console.error('❌ [CHECK-QUOTA] Error capturing screenshot:', screenshotError);
       }
     }
+    return { screenshot: null, hasQuotaExceeded: false, error, errorScreenshot };
+  } finally {
+    await cleanupBrowserResources(browser, context, page);
+  }
+}
 
+router.post('/check-quota', async (req: Request, res: Response): Promise<void> => {
+  const { server, username, password, bypass } = req.body;
+
+  if (!server) {
+    res.status(400).json({
+      success: false,
+      error: 'Proxy server is required'
+    });
+    return;
+  }
+
+  console.log(`🔍 [CHECK-QUOTA] Starting quota check for proxy ${server}`);
+
+  const proxyConfig: any = {
+    server,
+    ...(username && { username }),
+    ...(password && { password }),
+    ...(bypass && { bypass })
+  };
+
+  const result = await performQuotaCheck(proxyConfig);
+
+  if (result.error) {
+    console.error('❌ [CHECK-QUOTA] Error checking quota:', result.error);
     res.status(500).json({
       success: false,
       error: 'Failed to check quota',
-      details: error.message,
-      screenshot: errorScreenshot ? Buffer.from(errorScreenshot).toString('base64') : null
+      details: result.error.message,
+      screenshot: result.errorScreenshot ? Buffer.from(result.errorScreenshot).toString('base64') : null
     });
-  } finally {
-    await cleanupBrowserResources(browser, context, page);
+  } else {
+    res.type('image/png');
+    res.set('X-Proxy-Server', server);
+    res.set('X-Quota-Exceeded', result.hasQuotaExceeded.toString());
+    res.send(Buffer.from(result.screenshot));
   }
 });
 
