@@ -110,7 +110,7 @@ class JNTPhonesDb {
     if (!this.db) throw new Error('Database not initialized');
 
     try {
-      const normalizedName = name.trim().toLowerCase().replaceAll(/\s+/, '');
+      const normalizedName = name.trim().toLowerCase().replaceAll(/\s+/g, '');
       const stmt = this.db.prepare(`
         SELECT phone FROM ${DB_NAMES.JNT_PHONES}
         WHERE name = ?
