@@ -154,6 +154,56 @@ router.post('/phone', async (req: Request, res: Response) => {
 });
 
 /**
+ * DELETE /api/v1/jnt/phone/:name
+ * Delete all phones for a specific name
+ * Params: name - Account/seller name
+ * Examples:
+ * - /api/v1/jnt/phone/seller1
+ * - /api/v1/jnt/phone/my-account
+ */
+router.delete('/phone/:name', async (req: Request, res: Response) => {
+  try {
+    const nameParam = req.params.name;
+
+    if (typeof nameParam !== 'string' || !nameParam || nameParam.trim().length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Name parameter is required'
+      });
+    }
+
+    const deletedCount = await phoneManager.deletePhonesByName(nameParam);
+
+    if (deletedCount === 0) {
+      return res.status(404).json({
+        status: 'not_found',
+        message: `No phones found for name: ${nameParam}`,
+        name: nameParam,
+        deletedCount: 0
+      });
+    }
+
+    const allPhones = await phoneManager.getAllPhones();
+    const totalPhones = allPhones.reduce((sum, group) => sum + group.phones.length, 0);
+
+    return res.json({
+      status: 'success',
+      message: `Deleted ${deletedCount} phone(s) for name: ${nameParam}`,
+      name: nameParam,
+      deletedCount,
+      totalPhones
+    });
+  } catch (error) {
+    console.error('❌ [JNT PHONE ROUTE] Error deleting phones by name:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to delete phones by name',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
  * POST /api/v1/jnt/scan-phone
  * Start background brute-force scan for valid phone number
  * Body: { codes: string }

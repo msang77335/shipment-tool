@@ -162,6 +162,21 @@ class JNTPhoneManager {
       };
     } 
   }
+
+  /**
+   * Delete all phones by name
+   */
+  async deletePhonesByName(name: string): Promise<number> {
+    await this.ensureInitialized();
+    
+    if (!name || name.trim().length === 0) {
+      throw new Error('Name cannot be empty');
+    }
+
+    const deletedCount = await jntPhonesDb.removeByName(name);
+    console.log(`✅ [JNT PHONE] Deleted ${deletedCount} phones for name: ${name}`);
+    return deletedCount;
+  }
 }
 
 // Export singleton instance
