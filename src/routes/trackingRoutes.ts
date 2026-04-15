@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { isASENDIA, isAustraliaPost, isBestExpress, isDHL, isEVRI, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUPS, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { isASENDIA, isAustraliaPost, isBestExpress, isDHL, isEVRI, isFedEx, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUPS, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
 import { australiaPostTrackingShipment } from '../helpers/trackingShipment/australiaTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
@@ -14,6 +14,7 @@ import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingSh
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
+import { fedexTrackingShipment } from '../helpers/trackingShipment/fedexTrackingShipment';
 
 const router = Router();
 
@@ -49,6 +50,7 @@ const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }
   createProviderHandler(isGofo, ({ codes }) => gofoTrackingShipment({ codes })),
   createProviderHandler(isAustraliaPost, ({ codes }) => australiaPostTrackingShipment(codes)),
   createProviderHandler(isUPS, ({ codes }) => upsTrackingShipment({ codes })),
+  createProviderHandler(isFedEx, ({ codes }) => fedexTrackingShipment({ codes })),
 ];
 
 async function getTrackingResult({ codes, provider, bankAccountName }: { codes: string; provider: string; bankAccountName?: string }): Promise<{ status: string; buffer: Buffer } | null> {
