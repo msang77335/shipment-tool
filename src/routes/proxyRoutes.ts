@@ -71,6 +71,65 @@ router.get('/blacklist', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+/**
+ * DELETE /api/v1/proxy/blacklist
+ * Remove an entry from the blacklist by proxy server address
+ * 
+ * Query params:
+ *   proxyServer: string // Required: proxy server address (e.g., "http://1.2.3.4:8080")
+ */
+router.delete('/blacklist', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { proxyServer } = req.query;
+
+    // Validate input
+    if (!proxyServer || typeof proxyServer !== 'string') {
+      res.status(400).json({
+        success: false,
+        error: 'proxyServer is required and must be a string'
+      });
+      return;
+    }
+
+    // Find all entries with this proxy server and remove them
+    const blacklist = await proxyManager.getBlacklist();
+    const entriesToRemove = blacklist.filter(entry => entry.proxyServer === proxyServer);
+
+    if (entriesToRemove.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: `No blacklist entries found for proxy server: ${proxyServer}`
+      });
+      return;
+    }
+
+    // Remove all entries for this proxy server
+    for (const entry of entriesToRemove) {
+      await proxyManager.removeFromBlacklist(entry.provider, proxyServer);
+    }
+
+    res.json({
+      success: true,
+      message: `Removed ${entriesToRemove.length} blacklist entry(ies) for proxy server: ${proxyServer}`,
+      data: {
+        proxyServer,
+        removedCount: entriesToRemove.length,
+        removedEntries: entriesToRemove.map(e => ({
+          provider: e.provider,
+          reason: e.reason,
+          timestamp: new Date(e.timestamp).toISOString()
+        }))
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ [BLACKLIST] Error removing from blacklist:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to remove from blacklist'
+    });
+  }
+});
+
 // =============================================================================
 // WEBSHARE API
 // =============================================================================

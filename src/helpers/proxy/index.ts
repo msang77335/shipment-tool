@@ -307,6 +307,9 @@ class ProxyManager {
         this.proxies.splice(index, 1);
         console.log(`✅ [PROXY MANAGER] Removed proxy with IP: ${ip}`);
 
+        // Remove from database
+        await this.removeProxyFromDB(removed.server);
+
         // Remove from blacklist if exists
         const blacklist = await this.getBlacklist();
         for (const entry of blacklist) {
@@ -455,6 +458,9 @@ class ProxyManager {
         // Remove from list
         this.proxies.splice(index, 1);
         console.log(`✅ [PROXY MANAGER] Removed proxy with IP: ${ip}`);
+
+        // Remove from database
+        await this.removeProxyFromDB(removed.server);
 
         // Remove from blacklist if exists
         const blacklist = await this.getBlacklist();
