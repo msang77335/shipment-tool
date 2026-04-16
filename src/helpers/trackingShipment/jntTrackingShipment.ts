@@ -52,7 +52,7 @@ const trackingJnTPage = async ({ codes, bankAccountName }: { codes: string; bank
   const proxyList = proxyManager.getAllProxies() ?? [];
   try {
     const requests = phoneList?.map(phone =>
-      processingTracking(phone.trim(), codes, proxyList[Math.floor(Math.random() * proxyList.length)])
+      processingTracking(phone.trim(), codes, null)
     ) || [];
     const results = await Promise.all(requests);
 
@@ -99,7 +99,7 @@ const isHtmlResponse = (data: any): boolean => {
   return /<!DOCTYPE|<html|<div class="result_vandon"/.test(data.substring(0, 500));
 };
 
-const processingTracking = async (cellPhone: string, codes: string, proxy: ProxyInfo) => {
+const processingTracking = async (cellPhone: string, codes: string, proxy: ProxyInfo | null) => {
   const requestConfig: any = {
     params: {
       type: 'track',
