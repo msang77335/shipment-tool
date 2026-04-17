@@ -1,7 +1,8 @@
-import { isASENDIA, isGiaoHangNhanh, isOnTrac, isSPX, isYunExpress } from "../";
+import { Page } from "playwright";
+import { isASENDIA, isCanadaPost, isGiaoHangNhanh, isOnTrac, isSPX, isYunExpress } from "../";
 import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 
-async function navigateToPage(page: any, url: string): Promise<void> {
+async function navigateToPage(page: Page, url: string): Promise<void> {
   console.log(`🌐 [TRACKING SHIPMENT] Navigating to ${url}...`);
 
   try {
@@ -18,7 +19,7 @@ async function navigateToPage(page: any, url: string): Promise<void> {
   }
 }
 
-async function checkTrackingData(page: any): Promise<boolean> {
+async function checkTrackingData(page: Page): Promise<boolean> {
   console.log(`🔍 [TRACKING SHIPMENT] Checking for tracking data...`);
   return await page.evaluate(() => {
     const spxHasData = (globalThis as any).document.querySelector('.comp-tracking-milestone-progress-bar');
@@ -33,12 +34,16 @@ async function checkTrackingData(page: any): Promise<boolean> {
     const ontracErrorMsg = (globalThis as any).document.querySelector('#js-track-error-message');
     const ontracErrorVisible = ontracErrorMsg?.style?.display === 'block';
     const ontracHasData = !(ontracErrorVisible && ontracErrorMsg?.textContent?.includes('No tracking information for'));
+
+    // Check Canada Post: has data when error message is not visible
+    const pageText = (globalThis as any).document.body?.textContent || '';
+    const canadaPostHasData = !(pageText.includes("We didn't find an item associated with this number") || pageText.includes('No tracking information'));
     
-    return spxHasData || ghnHasData || yunHasData || ontracHasData;
+    return spxHasData || ghnHasData || yunHasData || ontracHasData || canadaPostHasData;
   });
 }
 
-async function getTrackingStatus(page: any, provider: string): Promise<string> {
+async function getTrackingStatus(page: Page, provider: string): Promise<string> {
   if (isSPX(provider)) {
     console.log(`📊 [TRACKING SHIPMENT] Getting tracking status for SPX...`);
     return await page.evaluate(() => {
@@ -162,11 +167,26 @@ async function getTrackingStatus(page: any, provider: string): Promise<string> {
 
       return 'UNKNOWN';
     });
+  } else if(isCanadaPost(provider)) {
+    console.log(`📊 [TRACKING SHIPMENT] Getting tracking status for Canada Post...`);
+    return await page.evaluate(() => {
+      const doc = (globalThis as any).document;
+
+      // Check for delivered status in the expected_date_container
+      const deliveredContainer = doc.querySelector('.expected_date_container');
+      const deliveredText = deliveredContainer?.textContent?.trim() || '';
+
+      if (deliveredText.includes('Delivered')) {
+        return 'DELIVERED';
+      }
+
+      return 'UNKNOWN';
+    });
   }
   return 'UNKNOWN';
 }
 
-async function takePage(page: any): Promise<Buffer> {
+async function takePage(page: Page): Promise<Buffer> {
   console.log(`✅ [TRACKING SHIPMENT] Tracking data found, taking screenshot...`);
   const screenshot = await page.screenshot({ fullPage: false });
   console.log(`✅ [TRACKING SHIPMENT] Screenshot captured, size: ${screenshot.length} bytes`);
@@ -174,7 +194,7 @@ async function takePage(page: any): Promise<Buffer> {
   return Buffer.from(screenshot);
 }
 
-async function closePage(page: any): Promise<void> {
+async function closePage(page: Page): Promise<void> {
   if (page && !page.isClosed()) {
     await page.close().catch((e: any) => console.log('Error closing page:', e));
   }
@@ -191,7 +211,7 @@ export async function trackingShipment(url: string, provider: string): Promise<{
   let lastError;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    let page;
+    let page: Page | undefined;
     try {
       console.log(`🆕 [TRACKING SHIPMENT] Creating new page (attempt ${attempt}/${maxRetries})...`);
       page = await browserContext.newPage();
@@ -232,7 +252,7 @@ export async function trackingShipment(url: string, provider: string): Promise<{
     } catch (error: any) {
       lastError = error;
       console.error(`💥 [TRACKING SHIPMENT] Attempt ${attempt}/${maxRetries} failed:`, error.message);
-      await closePage(page);
+      await closePage(page!);
 
       if (attempt < maxRetries) {
         const delay = attempt * 2000; // Exponential backoff

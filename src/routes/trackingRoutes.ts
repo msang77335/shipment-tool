@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { isASENDIA, isAustraliaPost, isBestExpress, isDHL, isEVRI, isFedEx, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUPS, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { isASENDIA, isAustraliaPost, isBestExpress, isCanadaPost, isDHL, isEVRI, isFedEx, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUPS, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
 import { australiaPostTrackingShipment } from '../helpers/trackingShipment/australiaTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
@@ -51,6 +51,7 @@ const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }
   createProviderHandler(isAustraliaPost, ({ codes }) => australiaPostTrackingShipment(codes)),
   createProviderHandler(isUPS, ({ codes }) => upsTrackingShipment({ codes })),
   createProviderHandler(isFedEx, ({ codes }) => fedexTrackingShipment({ codes })),
+  createProviderHandler(isCanadaPost, ({ codes }) => trackingShipment(`https://www.canadapost-postescanada.ca/track-reperage/en/details/${codes}`, 'Canada Post')),
 ];
 
 async function getTrackingResult({ codes, provider, bankAccountName }: { codes: string; provider: string; bankAccountName?: string }): Promise<{ status: string; buffer: Buffer } | null> {

@@ -119,6 +119,11 @@ export function isFedEx(providerStr: string) {
   return upperStr.includes('FEDEX') || upperStr.includes('FEDERAL EXPRESS');
 }
 
+export function isCanadaPost(providerStr: string) {
+  const upperStr = providerStr.toUpperCase();
+  return upperStr.includes('CANADA POST') || upperStr.includes('CANPOST');
+}
+
 export async function createPage(browserContext: any): Promise<Page> {
   const page = await browserContext.newPage();
   page.setDefaultTimeout(120000);
