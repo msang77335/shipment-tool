@@ -408,6 +408,27 @@ class ProxyManager {
     // In automatic mode, only take the first blacklisted IP
     const ipsToProcess = blacklistedIps.slice(0, 1);
 
+    const loadResult = await webshareApi.loadFromWebshare();
+
+    if(loadResult?.proxies.some(p => excludeIps.has(new URL(p.server).hostname))) {
+      // Remove excluded IPs from blacklist if they appear in Webshare proxies
+      const blacklist = await this.getBlacklist();
+      for (const entry of blacklist) {
+        if (entry.proxyServer) {
+          try {
+            const url = new URL(entry.proxyServer);
+            if (excludeIps.has(url.hostname)) {
+              await this.removeFromBlacklist(entry.provider, entry.proxyServer);
+              await blacklistDb.removeEntry(entry.provider, entry.proxyServer);
+              console.log(`🗑️ [PROXY MANAGER] Removed blacklist entry for excluded IP ${url.hostname}`);
+            }
+          } catch {
+            // Invalid URL, skip
+          }
+        }
+      }
+    }
+
     console.log(`📋 [PROXY MANAGER] Automatic mode: Processing 1 IP from ${blacklistedIps.length} blacklisted IPs (excluded: ${Array.from(excludeIps).join(', ')})`);
 
     if (!ipsToProcess || ipsToProcess.length === 0) {
