@@ -26,24 +26,6 @@ class Scheduler {
     this.scheduleProxyReplacement();
   }
 
-  /**
-   * Stop all scheduled jobs
-   */
-  stop(): void {
-    if (!this.isRunning) {
-      console.log('⏰ [SCHEDULER] Already stopped');
-      return;
-    }
-
-    if (this.replaceProxiesTask) {
-      this.replaceProxiesTask.stop();
-      this.replaceProxiesTask = null;
-    }
-
-    this.isRunning = false;
-    console.log('⏰ [SCHEDULER] All scheduled jobs stopped');
-  }
-
   // Schedule automatic proxy replacement from blacklist
   // Runs every 3 hours using cron pattern
   private scheduleProxyReplacement(): void {

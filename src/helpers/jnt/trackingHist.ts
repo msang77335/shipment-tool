@@ -22,22 +22,6 @@ class JNTTrackingHistManager {
   }
 
   /**
-   * Get all tracking history with optional pagination
-   */
-  async getAllHist(params: PaginationParams = {}): Promise<PaginatedResult<JNTTrackingHist> | JNTTrackingHist[]> {
-    await this.ensureInitialized();
-    
-    // If page or limit is specified, return paginated result
-    if (params.page !== undefined || params.limit !== undefined) {
-      return await jntTrackingHistDb.getAllHist(params) as PaginatedResult<JNTTrackingHist>;
-    }
-    
-    // Otherwise return all data (for backward compatibility)
-    const result = await jntTrackingHistDb.getAllHist({ page: 1, limit: 10000, ...params });
-    return result.data as JNTTrackingHist[];
-  }
-
-  /**
    * Get tracking history with strict pagination (always returns paginated result)
    */
   async getHistPaginated(params: PaginationParams = {}): Promise<PaginatedResult<JNTTrackingHist>> {
@@ -60,14 +44,6 @@ class JNTTrackingHistManager {
     await this.ensureInitialized();
     const entry = await jntTrackingHistDb.addEntry(codes, bankAccountName, site);
     return entry as JNTTrackingHist;
-  }
-
-  /**
-   * Get total count of tracking history
-   */
-  async getCount(site?: "J&T" | "AfterShip"): Promise<number> {
-    await this.ensureInitialized();
-    return await jntTrackingHistDb.getCount(site);
   }
 
   /**

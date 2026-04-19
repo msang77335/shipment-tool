@@ -5,8 +5,6 @@
  */
 
 import { replace } from "lodash";
-import { proxyManager } from "../proxy";
-import { PhoneBruteForceFinder } from "./scanPhone";
 import { jntPhonesDb } from "../../database/jntPhones";
 
 export interface JNTPhoneInfo {
@@ -33,7 +31,7 @@ class JNTPhoneManager {
   async getAllPhones(): Promise<JNTPhoneInfo[]> {
     await this.ensureInitialized();
     const grouped = await jntPhonesDb.getAllGroupedByName();
-    
+
     return Array.from(grouped.entries()).map(([name, phones]) => ({
       name,
       phones
@@ -54,7 +52,7 @@ class JNTPhoneManager {
    */
   async addPhone(phone: string, name: string): Promise<JNTPhoneInfo> {
     await this.ensureInitialized();
-    
+
     // Validate phone format
     if (!phone || phone.trim().length === 0) {
       throw new Error('Phone number cannot be empty');
@@ -65,9 +63,9 @@ class JNTPhoneManager {
     }
 
     const normalizedName = replace(name.trim().toLowerCase(), /\s+/g, '').trim();
-    
+
     await jntPhonesDb.addEntry(normalizedName, phone);
-    
+
     const phones = await jntPhonesDb.getPhonesByName(normalizedName);
     console.log(`✅ [JNT PHONE] Added phone: ${phone} under name: ${name} (Total: ${phones?.length || 0})`);
 
@@ -79,7 +77,7 @@ class JNTPhoneManager {
    */
   async addPhones(phoneInfo: JNTPhoneInfo[]): Promise<JNTPhoneInfo[]> {
     await this.ensureInitialized();
-    
+
     const addedPhones: JNTPhoneInfo[] = [];
     const errors: Array<{ entry: JNTPhoneInfo; error: string }> = [];
 
@@ -113,62 +111,12 @@ class JNTPhoneManager {
     return addedPhones;
   }
 
-  async scanPhone(codes: string): Promise<{ phone: string; status: string }> {
-    try {
-      await this.ensureInitialized();
-      
-      const allPhones = await jntPhonesDb.getAllPhones();
-      const proxies = proxyManager.getAllProxies();
-      
-      if(proxies.length === 0) {
-        console.warn('⚠️ [JNT PHONE] No proxies available for scanning');
-        return {
-          phone: '',
-          status: 'error: no proxies available'
-        }
-      }
-      
-      if (allPhones.length === 0) {
-        console.warn('⚠️ [JNT PHONE] No phones available for scanning');
-        return {
-          phone: '',
-          status: 'error: no phones available'
-        }
-      }
-      
-      const phoneBruteForceFinder = new PhoneBruteForceFinder();
-
-      const phonesResult = await phoneBruteForceFinder.findPhone(codes, allPhones);
-
-      if (phonesResult.validPhones) {
-        console.log(`   ✅ Valid phones found: ${phonesResult.validPhones}`);
-        return {
-          phone: phonesResult.validPhones,
-          status: 'success'
-        };
-      } else {
-        console.log(`   ❌ No valid phones found for code: ${codes}`);
-        return {
-          phone: '',
-          status: 'not found'
-        };
-      }      
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`❌ [JNT PHONE] Error in scanPhone: ${errorMsg}`);
-      return {
-        phone: '',
-        status: `error: ${errorMsg}`
-      };
-    } 
-  }
-
   /**
    * Delete all phones by name
    */
   async deletePhonesByName(name: string): Promise<number> {
     await this.ensureInitialized();
-    
+
     if (!name || name.trim().length === 0) {
       throw new Error('Name cannot be empty');
     }

@@ -68,13 +68,6 @@ class ScanPhoneJobManager {
   }
 
   /**
-   * Get the abort signal for a job (for testing/debugging)
-   */
-  getAbortSignal(jobId: string): AbortSignal | undefined {
-    return this.activeJobSignals.get(jobId)?.signal;
-  }
-
-  /**
    * Create a new scan phone job
    */
   async createJob(codes: string): Promise<ScanPhoneJob> {
@@ -184,33 +177,6 @@ class ScanPhoneJobManager {
       startedAt: entry.startedAt,
       completedAt: entry.completedAt
     }));
-  }
-
-  /**
-   * Get job statistics
-   */
-  async getStats(): Promise<{ total: number; pending: number; processing: number; success: number; error: number }> {
-    await this.ensureInitialized();
-    const counts = await scanPhoneJobsDb.getCountByStatus();
-
-    const countValues = Object.values(counts) as number[];
-    const total = countValues.reduce((sum, count) => sum + count, 0);
-
-    return {
-      total,
-      pending: counts['pending'] || 0,
-      processing: counts['processing'] || 0,
-      success: counts['success'] || 0,
-      error: counts['error'] || 0
-    };
-  }
-
-  /**
-   * Clean up old jobs (older than specified days)
-   */
-  async cleanupOldJobs(days: number = 7): Promise<number> {
-    await this.ensureInitialized();
-    return await scanPhoneJobsDb.cleanupOldJobs(days);
   }
 
   /**

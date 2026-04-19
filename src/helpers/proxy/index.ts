@@ -367,11 +367,135 @@ class ProxyManager {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Private helpers for replaceProxiesAutomatic
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Extract unique IP hostnames from the blacklist, excluding protected IPs
+   */
+  private async getBlacklistedIps(excludeIps: Set<string>): Promise<string[]> {
+    return (await this.getBlacklist())
+      .map(entry => {
+        if (!entry.proxyServer) return null;
+        try { return new URL(entry.proxyServer).hostname; } catch { return null; }
+      })
+      .filter((ip): ip is string => ip !== null)
+      .filter(ip => !excludeIps.has(ip));
+  }
+
+  /**
+   * Remove blacklist entries for excluded IPs that still appear in Webshare proxies
+   */
+  private async cleanExcludedBlacklistEntries(excludeIps: Set<string>, webshareProxies: ProxyInfo[]): Promise<void> {
+    const hasExcluded = webshareProxies.some(p => {
+      try { return excludeIps.has(new URL(p.server).hostname); } catch { return false; }
+    });
+    if (!hasExcluded) return;
+
+    const blacklist = await this.getBlacklist();
+    for (const entry of blacklist) {
+      if (!entry.proxyServer) continue;
+      try {
+        const hostname = new URL(entry.proxyServer).hostname;
+        if (excludeIps.has(hostname)) {
+          await this.removeFromBlacklist(entry.provider, entry.proxyServer);
+          await blacklistDb.removeEntry(entry.provider, entry.proxyServer);
+          console.log(`🗑️ [PROXY MANAGER] Removed blacklist entry for excluded IP ${hostname}`);
+        }
+      } catch { /* Invalid URL, skip */ }
+    }
+  }
+
+  /**
+   * Remove all blacklist entries for a given IP hostname
+   */
+  private async cleanBlacklistEntriesForIp(ip: string): Promise<string[]> {
+    const cleaned: string[] = [];
+    const blacklist = await this.getBlacklist();
+    for (const entry of blacklist) {
+      if (!entry.proxyServer) continue;
+      try {
+        if (new URL(entry.proxyServer).hostname === ip) {
+          await this.removeFromBlacklist(entry.provider, entry.proxyServer);
+          await blacklistDb.removeEntry(entry.provider, entry.proxyServer);
+          cleaned.push(ip);
+          console.log(`🗑️ [PROXY MANAGER] Removed unreachable blacklist entry for IP ${ip}`);
+        }
+      } catch { /* Invalid URL, skip */ }
+    }
+    return cleaned;
+  }
+
+  /**
+   * Find the first blacklisted IP that exists in the proxy pool; clean up stale entries
+   */
+  private async findValidIpToProcess(blacklistedIps: string[], currentProxyIps: Set<string>): Promise<{
+    ipToProcess: string | null;
+    cleanedBlacklistIps: string[];
+  }> {
+    const cleanedBlacklistIps: string[] = [];
+    for (const ip of blacklistedIps) {
+      if (currentProxyIps.has(ip)) return { ipToProcess: ip, cleanedBlacklistIps };
+      console.log(`⚠️  [PROXY MANAGER] Blacklisted IP ${ip} not found in proxy pool - removing from blacklist`);
+      const cleaned = await this.cleanBlacklistEntriesForIp(ip);
+      cleanedBlacklistIps.push(...cleaned);
+    }
+    return { ipToProcess: null, cleanedBlacklistIps };
+  }
+
+  /**
+   * Remove proxies by IP from pool, close browser contexts, remove from DB and blacklist
+   */
+  private async removeProxiesFromPool(ips: string[]): Promise<ProxyInfo[]> {
+    const removedProxies: ProxyInfo[] = [];
+    for (const ip of ips) {
+      const index = this.proxies.findIndex(p => p.server.includes(ip));
+      if (index === -1) continue;
+
+      const removed = this.proxies[index];
+      removedProxies.push(removed);
+
+      console.log(`🔌 [PROXY MANAGER] Closing browser instances for IP: ${ip}`);
+      await PlaywrightBrowserSingleton.closeContextForProxy(removed.server);
+
+      this.proxies.splice(index, 1);
+      console.log(`✅ [PROXY MANAGER] Removed proxy with IP: ${ip}`);
+      await this.removeProxyFromDB(removed.server);
+
+      const blacklist = await this.getBlacklist();
+      for (const entry of blacklist) {
+        if (entry.proxyServer === removed.server) {
+          await this.removeFromBlacklist(entry.provider, entry.proxyServer);
+          console.log(`🗑️ [PROXY MANAGER] Removed blacklist entry for proxy ${removed.server}`);
+        }
+      }
+    }
+    return removedProxies;
+  }
+
+  /**
+   * Reload proxies from Webshare and persist to DB
+   */
+  private async reloadAndPersistProxies(proxiesBeforeReload: number): Promise<{
+    newProxies: ProxyInfo[];
+    reloadedCount: number;
+  }> {
+    const loadResult = await webshareApi.loadFromWebshare();
+    this.proxies = loadResult.proxies;
+    const newProxies = this.proxies.slice(proxiesBeforeReload);
+    console.log(`🔄 [PROXY MANAGER] Reloaded ${loadResult.loaded} new proxies from Webshare`);
+    await this.syncProxiesToDB();
+    return { newProxies, reloadedCount: loadResult.loaded };
+  }
+
+  // ---------------------------------------------------------------------------
+
   /**
    * Replace proxies automatically by extracting IPs from blacklist
    * Only replaces 1 IP per call in automatic mode
    * If an IP is not found in the proxy list, it's removed from blacklist and tries the next one
-   * 
+   *
    * @param replaceCount - Number of new proxies to get for each replacement
    * @param dryRun - If true, performs a dry run without actual replacement
    * @returns Success status, removed proxies, and reloaded proxies count
@@ -390,200 +514,70 @@ class ProxyManager {
     error?: string;
     cleanedBlacklistIps?: string[];
   }> {
-    // IPs to exclude from replacement
     const excludeIps = new Set(['46.203.157.218', '104.253.212.63']);
 
-    // Extract IPs from blacklist (excluding protected IPs)
-    const blacklistedIps = (await this.getBlacklist())
-      .map(entry => {
-        if (!entry.proxyServer) return null;
-        try {
-          const url = new URL(entry.proxyServer);
-          return url.hostname;
-        } catch {
-          return null;
-        }
-      })
-      .filter((ip): ip is string => ip !== null && ip !== undefined)
-      .filter(ip => !excludeIps.has(ip));
-
     const loadResult = await webshareApi.loadFromWebshare();
+    await this.cleanExcludedBlacklistEntries(excludeIps, loadResult.proxies);
 
-    // Remove excluded IPs from blacklist if they appear in Webshare proxies
-    if(loadResult?.proxies.some(p => excludeIps.has(new URL(p.server).hostname))) {
-      const blacklist = await this.getBlacklist();
-      for (const entry of blacklist) {
-        if (entry.proxyServer) {
-          try {
-            const url = new URL(entry.proxyServer);
-            if (excludeIps.has(url.hostname)) {
-              await this.removeFromBlacklist(entry.provider, entry.proxyServer);
-              await blacklistDb.removeEntry(entry.provider, entry.proxyServer);
-              console.log(`🗑️ [PROXY MANAGER] Removed blacklist entry for excluded IP ${url.hostname}`);
-            }
-          } catch {
-            // Invalid URL, skip
-          }
-        }
-      }
-    }
-
+    const blacklistedIps = await this.getBlacklistedIps(excludeIps);
     console.log(`📋 [PROXY MANAGER] Automatic mode: Found ${blacklistedIps.length} blacklisted IPs (excluded: ${Array.from(excludeIps).join(', ')})`);
 
-    if (!blacklistedIps || blacklistedIps.length === 0) {
+    if (blacklistedIps.length === 0) {
       return {
         success: false,
         message: 'No blacklisted IPs found (all may be excluded)',
-        removedProxies: [],
-        newProxies: [],
-        reloadedCount: 0,
+        removedProxies: [], newProxies: [], reloadedCount: 0,
         totalProxies: this.proxies.length,
-        error: 'No IPs to replace',
-        cleanedBlacklistIps: []
+        error: 'No IPs to replace', cleanedBlacklistIps: []
       };
     }
 
-    // Get all proxy IPs currently in the pool
     const currentProxyIps = new Set(
-      this.proxies.map(p => {
-        try {
-          const url = new URL(p.server);
-          return url.hostname;
-        } catch {
-          return null;
-        }
-      }).filter((ip): ip is string => ip !== null)
+      this.proxies.map(p => { try { return new URL(p.server).hostname; } catch { return null; } })
+        .filter((ip): ip is string => ip !== null)
     );
 
-    const cleanedBlacklistIps: string[] = [];
-    let ipToProcess: string | null = null;
+    const { ipToProcess, cleanedBlacklistIps } = await this.findValidIpToProcess(blacklistedIps, currentProxyIps);
 
-    // Find the first IP that exists in the proxy list, or clean up others
-    for (const ip of blacklistedIps) {
-      if (currentProxyIps.has(ip)) {
-        ipToProcess = ip;
-        break;
-      } else {
-        // IP not found in proxy list - remove it from blacklist
-        console.log(`⚠️  [PROXY MANAGER] Blacklisted IP ${ip} not found in proxy pool - removing from blacklist`);
-        const blacklist = await this.getBlacklist();
-        for (const entry of blacklist) {
-          if (entry.proxyServer) {
-            try {
-              const url = new URL(entry.proxyServer);
-              if (url.hostname === ip) {
-                await this.removeFromBlacklist(entry.provider, entry.proxyServer);
-                await blacklistDb.removeEntry(entry.provider, entry.proxyServer);
-                cleanedBlacklistIps.push(ip);
-                console.log(`🗑️ [PROXY MANAGER] Removed unreachable blacklist entry for IP ${ip}`);
-              }
-            } catch {
-              // Invalid URL, skip
-            }
-          }
-        }
-      }
-    }
-
-    // If no IP found to process after cleanup
     if (!ipToProcess) {
       return {
         success: false,
         message: `No valid IPs to replace. Cleaned ${cleanedBlacklistIps.length} unreachable IPs from blacklist`,
-        removedProxies: [],
-        newProxies: [],
-        reloadedCount: 0,
+        removedProxies: [], newProxies: [], reloadedCount: 0,
         totalProxies: this.proxies.length,
-        error: 'No valid IPs in proxy pool',
-        cleanedBlacklistIps
+        error: 'No valid IPs in proxy pool', cleanedBlacklistIps
       };
     }
 
     console.log(`📋 [PROXY MANAGER] Automatic mode: Processing IP ${ipToProcess} (cleaned ${cleanedBlacklistIps.length} unreachable IPs)`);
 
     const ipsToProcess = [ipToProcess];
-
-    // Call Webshare API to replace proxies
-    const webshareResult = await webshareApi.replaceProxies(
-      ipsToProcess,
-      excludeIps,
-      replaceCount,
-      dryRun
-    );
+    const webshareResult = await webshareApi.replaceProxies(ipsToProcess, excludeIps, replaceCount, dryRun);
 
     if (!webshareResult.success) {
       return {
         success: false,
         message: `Webshare API replacement failed: ${webshareResult.message}`,
-        removedProxies: [],
-        newProxies: [],
-        reloadedCount: 0,
+        removedProxies: [], newProxies: [], reloadedCount: 0,
         totalProxies: this.proxies.length,
-        error: webshareResult.error,
-        cleanedBlacklistIps
+        error: webshareResult.error, cleanedBlacklistIps
       };
     }
 
-    // Step 2: Remove proxies that have these IP addresses from local pool
-    const removedProxies: ProxyInfo[] = [];
+    const removedProxies = await this.removeProxiesFromPool(ipsToProcess);
 
-    for (const ip of ipsToProcess) {
-      const index = this.proxies.findIndex(p => p.server.includes(ip));
-      if (index !== -1) {
-        const removed = this.proxies[index];
-        removedProxies.push(removed);
-
-        // Close browser contexts for this proxy
-        console.log(`🔌 [PROXY MANAGER] Closing browser instances for IP: ${ip}`);
-        await PlaywrightBrowserSingleton.closeContextForProxy(removed.server);
-
-        // Remove from list
-        this.proxies.splice(index, 1);
-        console.log(`✅ [PROXY MANAGER] Removed proxy with IP: ${ip}`);
-
-        // Remove from database
-        await this.removeProxyFromDB(removed.server);
-
-        // Remove from blacklist if exists
-        const blacklist = await this.getBlacklist();
-        for (const entry of blacklist) {
-          if (entry.proxyServer === removed.server) {
-            await this.removeFromBlacklist(entry.provider, entry.proxyServer);
-            console.log(`🗑️ [PROXY MANAGER] Removed blacklist entry for proxy ${removed.server}`);
-          }
-        }
-      }
-    }
-
-    // Step 3: Reload proxies from Webshare (only if not a dry run)
     let newProxies: ProxyInfo[] = [];
     let reloadedCount = 0;
     if (!dryRun) {
-      const proxiesBeforeReload = this.proxies.length;
-      const loadResult = await webshareApi.loadFromWebshare();
-      reloadedCount = loadResult.loaded;
-
-      // Update proxy pool with new proxies
-      this.proxies = loadResult.proxies;
-
-      // Capture newly added proxies
-      newProxies = this.proxies.slice(proxiesBeforeReload);
-
-      console.log(`🔄 [PROXY MANAGER] Reloaded ${reloadedCount} new proxies from Webshare`);
-
-      // Persist updated proxies to database
-      await this.syncProxiesToDB();
+      ({ newProxies, reloadedCount } = await this.reloadAndPersistProxies(this.proxies.length));
     }
 
     return {
       success: true,
       message: `Successfully replaced ${ipsToProcess.length} proxies via Webshare API${dryRun ? ' (dry run)' : ''}. Cleaned ${cleanedBlacklistIps.length} unreachable IPs from blacklist`,
       webshareResponse: webshareResult.response,
-      removedProxies,
-      newProxies,
-      reloadedCount,
-      totalProxies: this.proxies.length,
-      cleanedBlacklistIps
+      removedProxies, newProxies, reloadedCount,
+      totalProxies: this.proxies.length, cleanedBlacklistIps
     };
   }
 
