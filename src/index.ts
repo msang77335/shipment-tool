@@ -8,6 +8,7 @@ import path from 'node:path';
 import { env } from './helpers';
 import { proxyManager } from './helpers/proxy';
 import { scheduler } from './helpers/scheduler';
+import { scanPhoneJobManager } from './helpers/jnt/scanPhoneJobManager';
 import { apiKeyAuth } from './middleware/apiKeyAuth';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
@@ -86,6 +87,9 @@ proxyManager.loadFromDatabase().then(async () => {
   
   // Start scheduled jobs
   scheduler.start();
+
+  // Auto-resume any paused jobs from previous session
+  await scanPhoneJobManager.autoResumePausedJobs();
 
   const server = app.listen(PORT, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
