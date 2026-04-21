@@ -242,10 +242,28 @@ class ScanPhoneJobManager extends EventEmitter {
 
   /**
    * Delete a job by ID
+   * First pauses the job if it's running, then deletes it
    */
   async deleteJob(jobId: string): Promise<boolean> {
     await this.ensureInitialized();
-    return await scanPhoneJobsDb.deleteJob(jobId);
+    
+    // Abort the job if it's running
+    this.abortJob(jobId);
+    
+    // Pause the job in database
+    try {
+      await scanPhoneJobsDb.pauseJob(jobId);
+      console.log(`⏸️ [JOB MANAGER] Job ${jobId} paused before deletion`);
+    } catch (error) {
+      // Job might already be completed, continue with deletion
+      console.error(`ℹ️ [JOB MANAGER] Job ${jobId} already in terminal state`, error instanceof Error ? error.message : error);
+    }
+    
+    // Delete the job and its references
+    const deleted = await scanPhoneJobsDb.deleteJob(jobId);
+    this.cleanupSignal(jobId);
+    
+    return deleted;
   }
 
   /**
