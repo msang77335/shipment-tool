@@ -472,6 +472,7 @@ class ScanPhoneJobManager extends EventEmitter {
           return;
         }
 
+        // Evaluate phone validity before marking as processed
         const isValid = await this.evaluatePhoneValidity(trackingHist, attemptCount || 0);
 
         if (isValid) {
