@@ -94,9 +94,9 @@ export function isSingPost(providerStr: string) {
   return upperStr.includes('SINGPOST') || upperStr.includes('SING POST');
 }
 
-export function isDHL(providerStr: string) {
+export function isAfterShip(providerStr: string) {
   const upperStr = providerStr.toUpperCase();
-  return upperStr.includes('DHL');
+  return upperStr.includes('DHL') || upperStr.includes('ROYAL MAIL') || upperStr.includes('ARAMEX');
 }
 
 export function isGofo(providerStr: string) {

@@ -211,10 +211,9 @@ export class PhoneBruteForceFinder {
    * Check validity of provided phone numbers
    * @param billcode - Tracking code
    * @param phones - List of phone numbers to check
-   * @returns Set of valid phone numbers
+   * @returns First valid phone number found or null
    */
-  private async checkProvidedPhones(billcode: string, phones: string[]): Promise<Set<string>> {
-    const validPhonesSet = new Set<string>();
+  private async checkProvidedPhones(billcode: string, phones: string[]): Promise<string | null> {
 
     for (const phone of phones) {
       // Check for abort signal
@@ -224,13 +223,13 @@ export class PhoneBruteForceFinder {
       const result = await this.checkPhoneValidity(billcode, lastFourDigits);
 
       if (result.isValid) {
-        validPhonesSet.add(lastFourDigits);
+        return lastFourDigits
       }
 
       await new Promise(resolve => setTimeout(resolve, this.getRandomDelay()));
     }
 
-    return validPhonesSet;
+    return null;
   }
 
   /**
@@ -238,11 +237,9 @@ export class PhoneBruteForceFinder {
    * @param billcode - Tracking code
    * @param startFrom - Starting number for brute force
    * @param maxAttempts - Maximum attempts to try
-   * @returns Set of valid phone numbers found
+   * @returns First valid phone number found or null
    */
-  private async bruteForcePhones({ billcode, startFrom, maxAttempts, jobId }: { billcode: string; startFrom: number; maxAttempts: number; jobId: string }): Promise<Set<string>> {
-    const validPhonesSet = new Set<string>();
-
+  private async bruteForcePhones({ billcode, startFrom, maxAttempts, jobId }: { billcode: string; startFrom: number; maxAttempts: number; jobId: string }): Promise<string | null> {
     // Update progress callback immediately at start
     scanPhoneJobManager.emit(SCAN_PHONE_JOB_EVENT.UPDATE_ATTEMPT, jobId, this.attemptCount);
 
@@ -254,9 +251,7 @@ export class PhoneBruteForceFinder {
       const result = await this.checkPhoneValidity(billcode, lastFourDigits);
 
       if (result.isValid) {
-        validPhonesSet.add(lastFourDigits);
-        // Return immediately on first valid match
-        return validPhonesSet;
+        return lastFourDigits;
       }
 
       this.attemptCount++;
@@ -265,7 +260,7 @@ export class PhoneBruteForceFinder {
       await new Promise(resolve => setTimeout(resolve, this.getRandomDelay()));
     }
 
-    return validPhonesSet;
+    return null;
   }
 
   /**
@@ -285,9 +280,9 @@ export class PhoneBruteForceFinder {
   /**
    * Log results of phone search
    */
-  private logSearchResults(billcode: string, validPhones: Set<string>): void {
-    if (validPhones.size > 0) {
-      console.log(`✅ Valid phones for ${billcode}: ${Array.from(validPhones).join(', ')}`);
+  private logSearchResults(billcode: string, validPhone: string | null): void {
+    if (validPhone) {
+      console.log(`✅ Valid phone for ${billcode}: ${validPhone}`);
     }
   }
 
@@ -325,25 +320,26 @@ export class PhoneBruteForceFinder {
     validPhones: string;
     attemptCount: number;
   }> {
-    let validPhonesSet: Set<string>;
+    let validPhone: string | null = null;
 
     if (startFrom === 0) {
       console.log(`🔍 Starting phone scan for billcode: ${billcode} with provided phones...`);
-      validPhonesSet = await this.checkProvidedPhones(billcode, phones);
-      if (validPhonesSet.size === 0) {
+      validPhone = await this.checkProvidedPhones(billcode, phones);
+      
+      if (!validPhone) {
         console.log(`   🔍 No valid phones found in provided list, starting brute-force search...`);
-        validPhonesSet = await this.bruteForcePhones({ billcode, startFrom, maxAttempts, jobId });
+        validPhone = await this.bruteForcePhones({ billcode, startFrom, maxAttempts, jobId });
       }
     } else {
-      validPhonesSet = await this.bruteForcePhones({ billcode, startFrom, maxAttempts, jobId });
+      validPhone = await this.bruteForcePhones({ billcode, startFrom, maxAttempts, jobId });
     }
 
-    this.logSearchResults(billcode, validPhonesSet);
+    this.logSearchResults(billcode, validPhone);
 
     return {
       status: 'success',
       billcode: billcode,
-      validPhones: Array.from(validPhonesSet).join(', '),
+      validPhones: validPhone || '',
       attemptCount: this.attemptCount
     };
   }

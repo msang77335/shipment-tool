@@ -1,5 +1,5 @@
 import { Page } from 'playwright';
-import { applyStealthPatches, captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isDHL, isJTExpress, isUSPS, proxyManager, ScreenshotQuery, setStealthHeaders, waitBeforeRetry } from "..";
+import { applyStealthPatches, captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, isAfterShip, isJTExpress, isUSPS, proxyManager, ScreenshotQuery, setStealthHeaders, waitBeforeRetry } from "..";
 import { PlaywrightBrowserSingleton } from '../browser/PlaywrightBrowserSingleton';
 
 const getTrackingURL = (codes: string, provider: string) => {
@@ -7,7 +7,7 @@ const getTrackingURL = (codes: string, provider: string) => {
     return `https://www.aftership.com/track?c=jtexpress-vn&t=${codes}`;
   } else if (isUSPS(provider)) {
     return `https://www.aftership.com/track?c=usps-vn&t=${codes}`;
-  } else if (isDHL(provider)) {
+  } else if (isAfterShip(provider)) {
     return `https://www.aftership.com/track/${codes}`;
   }
   throw new Error(`Unsupported provider: ${provider}`);

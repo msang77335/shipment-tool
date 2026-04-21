@@ -322,7 +322,6 @@ class ScanPhoneJobManager extends EventEmitter {
         }
       }
 
-      console.log(`✅ [AUTO RESUME] Completed: ${resumed.length} resumed, ${errors.length} failed`);
       return { total: jobsToResume.length, resumed, errors };
     } catch (error) {
       console.error(`❌ [AUTO RESUME] Error during auto-resume:`, error);
