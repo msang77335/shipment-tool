@@ -423,4 +423,4 @@ Increase rate limits in `/src/index.ts` or implement per-user authentication.
 
 ## 📞 Support
 
-For issues and questions, please open an issue on GitHub.
+For issues and questions, please open an issue on GitHub. 
