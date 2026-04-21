@@ -478,7 +478,7 @@ class ScanPhoneJobManager extends EventEmitter {
           await phoneManager.addPhone(String(attemptCount).padStart(4, '0'), trackingHist.bankAccountName);
           await jntTrackingHistDb.markAsProcessed(ref.jntTrackingHistId);
           console.log(`✅ [EVENT] Marked tracking history ${ref.jntTrackingHistId} as processed for job ${jobId}`);
-          // return;
+          return;
         }
 
         const createJobResult = await this.createJob(result.billcode, (attemptCount + 1)  || 0);

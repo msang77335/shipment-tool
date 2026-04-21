@@ -365,12 +365,21 @@ class ScanPhoneJobsDb {
 
   /**
    * Delete a job by ID
+   * Also deletes all related reference entries to avoid Foreign Key constraint
    */
   async deleteJob(jobId: string): Promise<boolean> {
     if (!this.initialized) await this.initialize();
     if (!this.db) throw new Error('Database not initialized');
 
     try {
+      // Delete reference entries first (Foreign Key constraint)
+      const deleteRefStmt = this.db.prepare(`
+        DELETE FROM ${DB_NAMES.SCAN_PHONE_JOB_REF}
+        WHERE scanPhoneJobId = ?
+      `);
+      deleteRefStmt.run(jobId);
+
+      // Then delete the job itself
       const stmt = this.db.prepare(`
         DELETE FROM ${DB_NAMES.SCAN_PHONE_JOBS}
         WHERE id = ?
