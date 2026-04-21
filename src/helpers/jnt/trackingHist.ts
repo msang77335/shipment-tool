@@ -1,10 +1,14 @@
 import { jntTrackingHistDb, type PaginationParams, type PaginatedResult } from '../../database/jntTrackingHist';
+import { phoneManager } from './phone';
+import { scanPhoneJobManager } from './scanPhoneJobManager';
+import { trackWithPhones } from '../trackingShipment/jntTrackingShipment';
 
 export interface JNTTrackingHist {
   id: string;
   codes: string;
   bankAccountName: string;
   site: "J&T" | "AfterShip";
+  status?: 'pending' | 'processed' | 'failed';
   addedAt?: number;
 }
 
@@ -62,6 +66,102 @@ class JNTTrackingHistManager {
   async clearHistByDateRange(startTime: number, endTime: number): Promise<number> {
     await this.ensureInitialized();
     return await jntTrackingHistDb.clearHistByDateRange(startTime, endTime);
+  }
+
+  /**
+   * Scan phone numbers from JNT tracking history
+   * Gets 1 item from history, finds it in phone pool, and creates a scan job
+   * Returns job details or error info
+   */
+  async scanPhoneFromList(): Promise<{
+    success: boolean;
+    message: string;
+    phones?: string[];
+    jobId?: string;
+    error?: string;
+  }> {
+    try {
+      await this.ensureInitialized();
+
+      const canCreateJob = await scanPhoneJobManager.canCreateNewJob();
+      if (!canCreateJob) {
+        return {
+          success: false,
+          message: 'A scan job is already in progress. Please wait for it to complete before scanning from history.',
+          error: 'Job limit reached'
+        }
+      }
+
+      const histReadyForScan = await jntTrackingHistDb.getHistReadyForPhoneScan();
+
+      if (!histReadyForScan) {
+        return {
+          success: false,
+          message: 'No tracking history found',
+          error: 'Empty history'
+        };
+      }
+
+      console.log(`📋 [TRACKING HIST] Found history item: ${histReadyForScan.codes} (${histReadyForScan.bankAccountName})`);
+
+      // Find phones in the pool by account name
+      const phones = await phoneManager.getPhonesByName(histReadyForScan.bankAccountName);
+
+      if (phones?.length) {
+        const dedupedResults = await trackWithPhones(phones, histReadyForScan.codes);
+
+        // If we got multiple results, it means we successfully tracked with multiple phones, so we can add all phones to the pool under the bank account name for future use
+        if (dedupedResults.length > 1) {
+          // Mark history as processed since we successfully tracked
+          await jntTrackingHistDb.markAsProcessed(histReadyForScan.id!);
+          console.log(`✅ [TRACKING HIST] Successfully tracked for account: ${histReadyForScan.bankAccountName} with phones: ${phones.join(', ')}`);
+          return {
+            success: true,
+            message: `Successfully tracked for account: ${histReadyForScan.bankAccountName} with phones: ${phones.join(', ')}`,
+            phones,
+          }
+        }
+      }
+
+      const trackingCode = histReadyForScan.codes.split(',')[0].trim();
+
+      if (!trackingCode) {
+        return {
+          success: false,
+          message: 'No valid tracking code found in history item',
+          error: 'Invalid tracking code'
+        };
+      }
+
+      console.log(`⚠️  [TRACKING HIST] No phones found for account: ${histReadyForScan.bankAccountName}. Creating scan job for tracking code: ${trackingCode}`);
+      const createJobResult = await scanPhoneJobManager.createJob(trackingCode);
+      if (!createJobResult.success || !createJobResult.job) {
+        return {
+          success: false,
+          message: createJobResult.message || 'Failed to create scan job',
+          error: createJobResult.error || 'Unknown error'
+        }
+      }
+
+      const job = createJobResult.job;
+      await scanPhoneJobManager.createScanJobRef(job.id, histReadyForScan.id!);
+      console.log(`✅ [TRACKING HIST] Created scan job with ID: ${job.id} for account: ${histReadyForScan.bankAccountName} and tracking code: ${trackingCode}`);
+      scanPhoneJobManager.runJobInBackground(job.id);
+
+      return {
+        success: true,
+        message: `No phones found for account: ${histReadyForScan.bankAccountName}. Created scan job with ID: ${job.id}`,
+        jobId: job.id
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`❌ [TRACKING HIST] Error scanning from history:`, error);
+      return {
+        success: false,
+        message: 'Failed to scan from history',
+        error: errorMsg
+      };
+    }
   }
 }
 

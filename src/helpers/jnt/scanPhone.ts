@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from "axios";
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { proxyManager } from "../proxy";
+import { SCAN_PHONE_JOB_EVENT, scanPhoneJobManager } from "./scanPhoneJobManager";
 
 interface AxiosRequestConfig {
   params?: {
@@ -24,15 +25,13 @@ export class PhoneBruteForceFinder {
   private languages: string[];
   private headers: Record<string, string>;
   private client: AxiosInstance;
-  private onProgressCallback?: (attemptCount: number) => Promise<void>;
   private abortSignal?: AbortSignal;
   private maxRetries: number = 2;
   private retryDelay: number = 1000; // ms
 
-  constructor(onProgressCallback?: (attemptCount: number) => Promise<void>, initialAttemptCount: number = 0, abortSignal?: AbortSignal) {
+  constructor(initialAttemptCount: number = 0, abortSignal?: AbortSignal) {
     this.currentProxyIndex = 0;
     this.attemptCount = initialAttemptCount;
-    this.onProgressCallback = onProgressCallback;
     this.abortSignal = abortSignal;
 
     // User-Agent rotation list
@@ -241,21 +240,11 @@ export class PhoneBruteForceFinder {
    * @param maxAttempts - Maximum attempts to try
    * @returns Set of valid phone numbers found
    */
-  private async bruteForcePhones(
-    billcode: string,
-    startFrom: number,
-    maxAttempts: number
-  ): Promise<Set<string>> {
+  private async bruteForcePhones({ billcode, startFrom, maxAttempts, jobId }: { billcode: string; startFrom: number; maxAttempts: number; jobId: string }): Promise<Set<string>> {
     const validPhonesSet = new Set<string>();
 
     // Update progress callback immediately at start
-    if (this.onProgressCallback) {
-      try {
-        await this.onProgressCallback(this.attemptCount);
-      } catch (error) {
-        console.error(`⚠️ [BRUTE FORCE] Failed to update progress:`, error);
-      }
-    }
+    scanPhoneJobManager.emit(SCAN_PHONE_JOB_EVENT.UPDATE_ATTEMPT, jobId, this.attemptCount);
 
     for (let i = startFrom; i < maxAttempts; i++) {
       // Check for abort signal
@@ -271,7 +260,7 @@ export class PhoneBruteForceFinder {
       }
 
       this.attemptCount++;
-      await this.logBruteForceProgress();
+      await this.logBruteForceProgress(jobId);
 
       await new Promise(resolve => setTimeout(resolve, this.getRandomDelay()));
     }
@@ -283,19 +272,13 @@ export class PhoneBruteForceFinder {
    * Log progress during brute force search
    * Also calls progress callback to update database in real-time
    */
-  private async logBruteForceProgress(): Promise<void> {
+  private async logBruteForceProgress(jobId: string): Promise<void> {
     // Update every 20 attempts for more real-time feedback
     if (this.attemptCount % 20 === 0) {
       console.log(`   ⏱️  Attempted ${this.attemptCount} combinations...`);
-      
-      // Update database with current progress
-      if (this.onProgressCallback) {
-        try {
-          await this.onProgressCallback(this.attemptCount);
-        } catch (error) {
-          console.error(`⚠️ [BRUTE FORCE] Failed to update progress:`, error);
-        }
-      }
+
+      // Emit event to update attempt count in database
+      scanPhoneJobManager.emit(SCAN_PHONE_JOB_EVENT.UPDATE_ATTEMPT, jobId, this.attemptCount);
     }
   }
 
@@ -323,10 +306,19 @@ export class PhoneBruteForceFinder {
     * @returns {Promise<Object>} Result with valid phones and attempt count
    */
   async findPhone(
-    billcode: string,
-    phones: string[],
-    startFrom: number = 0,
-    maxAttempts: number = 10000
+    {
+      billcode,
+      phones,
+      startFrom,
+      maxAttempts = 9999,
+      jobId
+    }: {
+      billcode: string;
+      phones: string[];
+      startFrom: number;
+      maxAttempts?: number;
+      jobId: string;
+    }
   ): Promise<{
     status: string;
     billcode: string;
@@ -338,12 +330,12 @@ export class PhoneBruteForceFinder {
     if (startFrom === 0) {
       console.log(`🔍 Starting phone scan for billcode: ${billcode} with provided phones...`);
       validPhonesSet = await this.checkProvidedPhones(billcode, phones);
-      if (validPhonesSet.size  === 0) {
+      if (validPhonesSet.size === 0) {
         console.log(`   🔍 No valid phones found in provided list, starting brute-force search...`);
-        validPhonesSet = await this.bruteForcePhones(billcode, startFrom, maxAttempts);
+        validPhonesSet = await this.bruteForcePhones({ billcode, startFrom, maxAttempts, jobId });
       }
     } else {
-      validPhonesSet = await this.bruteForcePhones(billcode, startFrom, maxAttempts);
+      validPhonesSet = await this.bruteForcePhones({ billcode, startFrom, maxAttempts, jobId });
     }
 
     this.logSearchResults(billcode, validPhonesSet);

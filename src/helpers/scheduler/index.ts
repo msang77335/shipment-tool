@@ -5,6 +5,7 @@
 
 import cron, { ScheduledTask } from 'node-cron';
 import { proxyManager } from '../proxy';
+import { trackingHistManager } from '../jnt/trackingHist';
 
 class Scheduler {
   private replaceProxiesTask: ScheduledTask | null = null;
@@ -24,6 +25,9 @@ class Scheduler {
 
     // Schedule proxy replacement every 5 minutes
     this.scheduleProxyReplacement();
+
+    // Schedule scan phone job resumption every 30 minutes
+    this.scheduleScanPhoneJob();
   }
 
   // Schedule automatic proxy replacement from blacklist
@@ -61,6 +65,40 @@ class Scheduler {
     } catch (error) {
       console.error(`❌ [SCHEDULER] Error during proxy replacement:`, error);
     }
+  }
+
+  /**
+   * Schedule scan phone job form JNT history tracking
+   * Runs every 30 minutes using cron pattern
+   */
+  private scheduleScanPhoneJob(): void {
+    const CRON_PATTERN = '*/30 * * * *'; // Every 30 minutes
+
+    console.log(`🔄 [SCHEDULER] Scheduling scan phone job resumption (${CRON_PATTERN})`);
+
+    // this.replaceProxiesTask = cron.schedule(CRON_PATTERN, () => {
+    //   this.executeScanPhoneJobResumption();
+    // });
+
+    console.log('✅ [SCHEDULER] Scan phone job resumption task scheduled');
+  }
+
+  /**
+   * Execute scan phone job resumption
+   * - Finds paused or stuck jobs and attempts to resume them
+   * - Runs every 30 minutes to ensure jobs are not left hanging indefinitely
+   */
+  private async executeScanPhoneJobResumption(): Promise<void> {
+    try {
+      const timestamp = new Date().toISOString();
+      console.log(`⏰ [SCHEDULER] Executing scan phone job resumption at ${timestamp}`);
+
+      // Get jobs to resume (paused or stuck)
+      await trackingHistManager.scanPhoneFromList();
+
+    } catch (error) {
+      console.error(`❌ [SCHEDULER] Error during scan phone job resumption:`, error);
+    };
   }
 }
 

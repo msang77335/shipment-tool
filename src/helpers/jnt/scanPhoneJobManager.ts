@@ -3,11 +3,22 @@
  * Stores results in SQLite database
  */
 
+import EventEmitter from 'node:events';
+import { jntTrackingHistDb, JNTTrackingHistEntry } from '../../database/jntTrackingHist';
 import { scanPhoneJobsDb, type ScanPhoneJobEntry } from '../../database/scanPhoneJobs';
-import { PhoneBruteForceFinder } from './scanPhone';
+import { scanPhoneJobRefDb } from '../../database/scanPhoneJobs/scanPhoneJobRefDb';
+import { trackWithPhones } from '../trackingShipment/jntTrackingShipment';
 import { phoneManager } from './phone';
+import { PhoneBruteForceFinder } from './scanPhone';
 
 type JobStatus = 'pending' | 'processing' | 'paused' | 'success' | 'error';
+
+export const SCAN_PHONE_JOB_EVENT = {
+  JOB_STARTED: 'jobStarted',
+  JOB_RESUMED: 'jobResumed',
+  UPDATE_ATTEMPT: 'updateAttempt',
+  JOB_COMPLETED: 'jobCompleted'
+}
 
 export interface ScanPhoneJob {
   id: string;
@@ -26,7 +37,7 @@ export interface ScanPhoneJob {
   completedAt?: number;
 }
 
-class ScanPhoneJobManager {
+class ScanPhoneJobManager extends EventEmitter {
   private initialized: boolean = false;
   private activeJobSignals: Map<string, AbortController> = new Map();
 
@@ -68,17 +79,39 @@ class ScanPhoneJobManager {
   }
 
   /**
+   * Check if a new job can be created (no pending/processing/paused jobs)
+   */
+  async canCreateNewJob(): Promise<boolean> {
+    await this.ensureInitialized();
+
+    return scanPhoneJobsDb.canCreateNewJob();
+  }
+
+  /**
    * Create a new scan phone job
    */
-  async createJob(codes: string): Promise<ScanPhoneJob> {
+  async createJob(codes: string, attemptCount: number = 0): Promise<{ success: boolean; message: string; job?: ScanPhoneJob; error?: string }> {
     await this.ensureInitialized();
-    const entry = await scanPhoneJobsDb.createJob(codes);
-    
+    const canCreateNewJob = await scanPhoneJobsDb.canCreateNewJob();
+    if (!canCreateNewJob) {
+      return {
+        success: false,
+        message: 'A job is already in progress. Please wait for it to complete before creating a new one.',
+        error: 'Job limit reached'
+      }
+    }
+    const entry = await scanPhoneJobsDb.createJob(codes, attemptCount);
+
     return {
-      id: entry.id!,
-      codes: entry.codes,
-      status: entry.status as JobStatus,
-      createdAt: entry.createdAt!
+      success: true,
+      message: 'Job created successfully',
+      job: {
+        id: entry.id!,
+        codes: entry.codes,
+        status: entry.status as JobStatus,
+        attemptCount: entry.attemptCount,
+        createdAt: entry.createdAt!
+      }
     };
   }
 
@@ -88,7 +121,7 @@ class ScanPhoneJobManager {
   async getJob(jobId: string): Promise<ScanPhoneJob | null> {
     await this.ensureInitialized();
     const entry = await scanPhoneJobsDb.getJob(jobId);
-    
+
     if (!entry) {
       console.warn(`⚠️ [SCAN JOBS] Job ${jobId} not found`);
       return null;
@@ -140,15 +173,43 @@ class ScanPhoneJobManager {
   }
 
   /**
+   * Start background job processing (emits event)
+   */
+  async runJobInBackground(jobId: string): Promise<void> {
+    const job = await this.getJob(jobId) as ScanPhoneJob;
+    if (!job) {
+      console.error(`❌ [JNT] Job ${jobId} not found for background processing`);
+      return;
+    }
+
+    console.log(`📤 [JNT] Emitting JOB_STARTED event for job ${jobId}`);
+    this.emit(SCAN_PHONE_JOB_EVENT.JOB_STARTED, jobId);
+  }
+
+  /**
    * Pause a processing job (actually stops the background process)
    */
   async pauseJob(jobId: string): Promise<void> {
     // Signal the background job to stop
     this.abortJob(jobId);
-    
+
     // Update DB status to paused
     await this.ensureInitialized();
     await scanPhoneJobsDb.pauseJob(jobId);
+  }
+
+  /**
+   * Resume a paused job in background (emits event)
+   */
+  async resumeJobInBackground(jobId: string): Promise<void> {
+    const job = await this.getJob(jobId) as ScanPhoneJob;
+    if (!job) {
+      console.error(`❌ [JNT] Job ${jobId} not found for background resume`);
+      return;
+    }
+
+    console.log(`📤 [JNT] Emitting JOB_RESUMED event for job ${jobId}`);
+    this.emit(SCAN_PHONE_JOB_EVENT.JOB_RESUMED, jobId);
   }
 
   /**
@@ -188,49 +249,12 @@ class ScanPhoneJobManager {
   }
 
   /**
-   * Start background resume processing for a single job
+   * Start background resume processing for a single job (emits event)
    * @private
    */
   private async startBackgroundResume(job: ScanPhoneJob): Promise<void> {
-    const abortSignal = this.createAbortSignal(job.id);
-
-    (async () => {
-      try {
-        const allPhones = await phoneManager.getAllPhones();
-        const phoneSet = new Set<string>();
-
-        allPhones.forEach(group => {
-          group.phones.forEach(phone => phoneSet.add(phone));
-        });
-
-        const phoneList = Array.from(phoneSet);
-
-        if (phoneList.length === 0) {
-          await this.setError(job.id, 'No phones available in pool');
-          this.cleanupSignal(job.id);
-          return;
-        }
-
-        const finder = new PhoneBruteForceFinder(async (attemptCount) => {
-          await this.updateProgress(job.id, attemptCount);
-        }, job.attemptCount || 0, abortSignal);
-
-        const startFrom = Math.max(0, (job.attemptCount || 0));
-        const result = await finder.findPhone(job.codes, phoneList, startFrom);
-
-        await this.setSuccess(job.id, result, result.attemptCount);
-        this.cleanupSignal(job.id);
-      } catch (error) {
-        if (error instanceof Error && error.message === 'JOB_ABORTED') {
-          console.log(`✅ [AUTO RESUME] Job ${job.id} paused by user`);
-        } else {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          await this.setError(job.id, errorMsg);
-          console.error(`❌ [AUTO RESUME] Error in resumed job ${job.id}:`, error);
-        }
-        this.cleanupSignal(job.id);
-      }
-    })();
+    console.log(`📤 [AUTO RESUME] Emitting JOB_RESUMED event for job ${job.id}`);
+    this.emit(SCAN_PHONE_JOB_EVENT.JOB_RESUMED, job.id);
   }
 
   /**
@@ -271,7 +295,7 @@ class ScanPhoneJobManager {
   }> {
     try {
       await this.ensureInitialized();
-      
+
       const jobsToResume = await this.getJobsToResume();
 
       if (jobsToResume.length === 0) {
@@ -280,7 +304,7 @@ class ScanPhoneJobManager {
       }
 
       console.log(`🔍 [AUTO RESUME] Found ${jobsToResume.length} job(s) to resume...`);
-      
+
       const resumed: string[] = [];
       const errors: { jobId: string; error: string }[] = [];
 
@@ -305,6 +329,178 @@ class ScanPhoneJobManager {
       return { total: 0, resumed: [], errors: [{ jobId: 'unknown', error: String(error) }] };
     }
   }
+
+  async createScanJobRef(scanPhoneJobId: string, jntTrackingHistId: string) {
+    await this.ensureInitialized();
+    return await scanPhoneJobRefDb.addEntry(scanPhoneJobId, jntTrackingHistId);
+  }
+
+  /**
+   * Extract unique phones from all groups
+   * @private
+   */
+  private async getPhonePoolList(): Promise<string[]> {
+    const allPhones = await phoneManager.getAllPhones();
+    const phoneSet = new Set<string>();
+    allPhones.forEach(group => group.phones.forEach(phone => phoneSet.add(phone)));
+    return Array.from(phoneSet);
+  }
+
+  /**
+   * Handle job execution errors
+   * @private
+   */
+  private async handleExecutionError(jobId: string, error: unknown): Promise<void> {
+    if (error instanceof Error && error.message === 'JOB_ABORTED') {
+      console.log(`✅ [EVENT] Job ${jobId} paused by user`);
+      return;
+    }
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [EVENT] Error in job ${jobId}:`, error);
+    console.error(`📝 [EVENT] Error details:`, { message: errorMsg, stack: error instanceof Error ? error.stack : 'N/A' });
+    await this.setError(jobId, errorMsg);
+  }
+
+  /**
+   * Handle job execution logic (shared by JOB_STARTED and JOB_RESUMED)
+   * @private
+   */
+  private async handleJobExecution(jobId: string, isResume: boolean = false): Promise<void> {
+    try {
+      const job = await this.getJob(jobId);
+      if (!job) {
+        console.error(`❌ [EVENT] Job ${jobId} not found`);
+        return;
+      }
+
+      // Set processing status only if not resuming (already paused)
+      if (isResume) {
+        console.log(`⚙️ [EVENT] Job ${jobId} status already set to paused, resuming...`);
+      } else {
+        await scanPhoneJobsDb.setProcessing(jobId);
+        console.log(`⚙️ [EVENT] Job ${jobId} status set to processing`);
+      }
+
+      // Create abort signal for this job
+      const abortSignal = this.createAbortSignal(jobId);
+
+      // Get all phones from the pool
+      const phoneList = await this.getPhonePoolList();
+      if (phoneList.length === 0) {
+        await this.setError(jobId, 'No phones available in pool');
+        this.cleanupSignal(jobId);
+        return;
+      }
+
+      const finder = new PhoneBruteForceFinder(Number.parseInt(job.attemptCount?.toString() || '0') || 0, abortSignal);
+
+      // Calculate start position
+      const startFrom = Math.max(0, (job.attemptCount || 0));
+      const logPrefix = isResume ? 'Resuming' : 'Starting';
+      console.log(`⏳ [EVENT] ${logPrefix} phone find for job ${jobId}, startFrom: ${startFrom}`);
+
+      // Run the scan
+      const result = await finder.findPhone({ billcode: job.codes, phones: phoneList, startFrom, jobId });
+      const logSuffix = isResume ? 'resumed and completed' : 'completed';
+      console.log(`✅ [EVENT] Phone find ${logSuffix} for job ${jobId}. Result:`, JSON.stringify(result));
+
+      // Save result with attemptCount
+      console.log(`💾 [EVENT] Calling setSuccess for job ${jobId} with attemptCount: ${result.attemptCount}`);
+      await this.setSuccess(jobId, result, result.attemptCount);
+      console.log(`✅ [EVENT] setSuccess completed for job ${jobId}`);
+
+      // Emit job completed event
+      this.emit(SCAN_PHONE_JOB_EVENT.JOB_COMPLETED, jobId, result);
+    } catch (error) {
+      await this.handleExecutionError(jobId, error);
+    } finally {
+      this.cleanupSignal(jobId);
+    }
+  }
+
+  private async evaluatePhoneValidity(trackingHist: JNTTrackingHistEntry, attemptCount: number): Promise<boolean> {
+    const dedupedResults = await trackWithPhones([String(attemptCount)], trackingHist.codes);
+    return dedupedResults.length > 1; // If more than 1 result, it means the phone is valid (found in pool)
+  }
+
+  setupEventListeners() {
+    this.on(SCAN_PHONE_JOB_EVENT.JOB_STARTED, async (jobId: string) => {
+      console.log(`🚀 [EVENT] Job ${jobId} started`);
+
+      // Start background processing (don't await)
+      (async () => {
+        await this.handleJobExecution(jobId, false);
+      })();
+    });
+
+    this.on(SCAN_PHONE_JOB_EVENT.JOB_RESUMED, async (jobId: string) => {
+      console.log(`▶️ [EVENT] Job ${jobId} resumed`);
+
+      // Start background processing (don't await)
+      (async () => {
+        await this.handleJobExecution(jobId, true);
+      })();
+    });
+
+    this.on(SCAN_PHONE_JOB_EVENT.UPDATE_ATTEMPT, (jobId: string, attemptCount: number) => {
+      scanPhoneJobsDb.updateAttemptCount(jobId, attemptCount).catch(err => {
+        console.error(`❌ [EVENT] Failed to update attempt count for job ${jobId}:`, err);
+      });
+    });
+
+    this.on(SCAN_PHONE_JOB_EVENT.JOB_COMPLETED, async (jobId: string, result: { validPhones: string, billcode: string }) => {
+      console.log(`🎉 [EVENT] Job ${jobId} completed with result:`, result);
+
+      const attemptCount = Number.parseInt(result.validPhones) || 0;
+
+      if (attemptCount === 0) {
+        console.log(`⚠️ [EVENT] Job ${jobId} found no valid phones, skipping post-processing`);
+        return;
+      }
+
+      // Mark associated tracking history as processed
+      try {
+        const ref = await scanPhoneJobRefDb.getByScanPhoneJobId(jobId);
+
+        if (!ref) {
+          console.warn(`⚠️ [EVENT] No tracking history reference found for job ${jobId}`);
+          return;
+        }
+
+        const trackingHist = await jntTrackingHistDb.getById(ref.jntTrackingHistId);
+        if (!trackingHist) {
+          console.warn(`⚠️ [EVENT] No tracking history found for reference ${ref.id} and job ${jobId}`);
+          return;
+        }
+
+        const isValid = await this.evaluatePhoneValidity(trackingHist, attemptCount || 0);
+
+        if (isValid) {
+          await phoneManager.addPhone(String(attemptCount).padStart(4, '0'), trackingHist.bankAccountName);
+          await jntTrackingHistDb.markAsProcessed(ref.jntTrackingHistId);
+          console.log(`✅ [EVENT] Marked tracking history ${ref.jntTrackingHistId} as processed for job ${jobId}`);
+          // return;
+        }
+
+        const createJobResult = await this.createJob(result.billcode, (attemptCount + 1)  || 0);
+        if (!createJobResult.success || !createJobResult.job) {
+          console.warn(`⚠️ [EVENT] Failed to create follow-up scan job: ${createJobResult.error || createJobResult.message}`);
+          return;
+        }
+
+        const job = createJobResult.job;
+        await this.createScanJobRef(job.id, ref.jntTrackingHistId);
+        console.log(`✅ [TRACKING HIST] Created scan job with ID: ${job.id} for account: ${trackingHist.bankAccountName} and tracking code: ${result.billcode}`);
+        this.runJobInBackground(job.id);
+
+      } catch (error) {
+        console.error(`❌ [EVENT] Failed to mark tracking history as processed:`, error);
+      }
+    });
+  }
 }
 
 export const scanPhoneJobManager = new ScanPhoneJobManager();
+
+// Initialize event listeners on startup
+scanPhoneJobManager.setupEventListeners();

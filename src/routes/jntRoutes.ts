@@ -9,7 +9,6 @@
 
 import { Request, Response, Router } from 'express';
 import { phoneManager } from '../helpers/jnt/phone';
-import { PhoneBruteForceFinder } from '../helpers/jnt/scanPhone';
 import { scanPhoneJobManager } from '../helpers/jnt/scanPhoneJobManager';
 import { trackingHistManager } from '../helpers/jnt/trackingHist';
 import { cleanupBrowserResources, launchBrowserWithProxy, proxyManager, setupPageAndNavigate } from '../helpers/proxy';
@@ -221,73 +220,19 @@ router.post('/scan-phone', async (req: Request, res: Response) => {
       });
     }
 
-    // Check if there's already a processing job
-    const existingJobs = await scanPhoneJobManager.listJobs(1000, 'processing');
-    if (existingJobs.length > 0) {
-      return res.status(409).json({
-        status: 'error',
-        message: 'A scan job is already processing',
-        processingJob: {
-          id: existingJobs[0].id,
-          codes: existingJobs[0].codes,
-          attemptCount: existingJobs[0].attemptCount,
-          startedAt: existingJobs[0].startedAt
-        }
-      });
-    }
-
     // Create a new job
-    const job = await scanPhoneJobManager.createJob(codes);
+    const createJobResult = await scanPhoneJobManager.createJob(codes, startFrom || 0);
 
-    // Create abort signal for this job
-    const abortSignal = scanPhoneJobManager.createAbortSignal(job.id);
+    // If job creation failed due to existing job or other reason, return error response
+    if(!createJobResult.success || !createJobResult.job) {
+      return res.status(500).json({
+        status: 'error',
+        message: createJobResult.message || 'Failed to create scan job',
+      })
+    }
+    const job = createJobResult.job;
 
-    // Start background processing (don't await)
-    (async () => {
-      try {
-        await scanPhoneJobManager.setProcessing(job.id);
-
-        // Get all phones from the pool
-        const allPhones = await phoneManager.getAllPhones();
-        const phoneSet = new Set<string>();
-
-        // Flatten all phones from all name groups (auto-remove duplicates)
-        allPhones.forEach(group => {
-          group.phones.forEach(phone => phoneSet.add(phone));
-        });
-
-        const phoneList = Array.from(phoneSet);
-
-        if (phoneList.length === 0) {
-          await scanPhoneJobManager.setError(job.id, 'No phones available in pool');
-          scanPhoneJobManager.cleanupSignal(job.id);
-          return;
-        }
-
-        const finder = new PhoneBruteForceFinder(async (attemptCount) => {
-          // Callback to update progress in real-time
-          await scanPhoneJobManager.updateProgress(job.id, attemptCount);
-        }, Number.parseInt(startFrom) || 0, abortSignal);
-
-        // Run the scan
-        const result = await finder.findPhone(codes, phoneList, Number.parseInt(startFrom) || 0);
-
-        // Save result with attemptCount
-        await scanPhoneJobManager.setSuccess(job.id, result, result.attemptCount);
-        scanPhoneJobManager.cleanupSignal(job.id);
-      } catch (error) {
-        // Handle abort gracefully
-        if (error instanceof Error && error.message === 'JOB_ABORTED') {
-          console.log(`✅ [JNT] Job ${job.id} paused by user`);
-          // Status is already set to 'paused' by pauseJob()
-        } else {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          await scanPhoneJobManager.setError(job.id, errorMsg);
-          console.error(`❌ [JNT] Error in background scan job ${job.id}:`, error);
-        }
-        scanPhoneJobManager.cleanupSignal(job.id);
-      }
-    })();
+    scanPhoneJobManager.runJobInBackground(job.id);
 
     return res.json({
       status: 'success',
@@ -444,56 +389,11 @@ router.put('/scan-phone/:id/resume', async (req: Request, res: Response) => {
       });
     }
 
-    // Resume the job
+    // Resume the job (update status to paused in DB)
     await scanPhoneJobManager.resumeJob(id as string);
 
-    // Create new abort signal for resumed job
-    const abortSignal = scanPhoneJobManager.createAbortSignal(id as string);
-
-    // Start background processing with saved attemptCount as startFrom
-    (async () => {
-      try {
-        // Get all phones from the pool
-        const allPhones = await phoneManager.getAllPhones();
-        const phoneSet = new Set<string>();
-
-        allPhones.forEach(group => {
-          group.phones.forEach(phone => phoneSet.add(phone));
-        });
-
-        const phoneList = Array.from(phoneSet);
-
-        if (phoneList.length === 0) {
-          await scanPhoneJobManager.setError(id as string, 'No phones available in pool');
-          scanPhoneJobManager.cleanupSignal(id as string);
-          return;
-        }
-
-        const finder = new PhoneBruteForceFinder(async (attemptCount) => {
-          // Callback to update progress in real-time
-          await scanPhoneJobManager.updateProgress(id as string, attemptCount);
-        }, job.attemptCount || 0, abortSignal);
-
-        // Resume from saved attempt count (continue brute force)
-        const startFrom = Math.max(0, (job.attemptCount || 0));
-        const result = await finder.findPhone(job.codes, phoneList, startFrom);
-
-        // Save result with updated attemptCount
-        await scanPhoneJobManager.setSuccess(id as string, result, result.attemptCount);
-        scanPhoneJobManager.cleanupSignal(id as string);
-      } catch (error) {
-        // Handle abort gracefully
-        if (error instanceof Error && error.message === 'JOB_ABORTED') {
-          console.log(`✅ [JNT] Resumed job ${id} paused by user`);
-          // Status is already set to 'paused' by pauseJob()
-        } else {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          await scanPhoneJobManager.setError(id as string, errorMsg);
-          console.error(`❌ [JNT] Error in resumed scan job ${id}:`, error);
-        }
-        scanPhoneJobManager.cleanupSignal(id as string);
-      }
-    })();
+    // Start background processing via event (don't await)
+    await scanPhoneJobManager.resumeJobInBackground(id as string);
 
     const updatedJob = await scanPhoneJobManager.getJob(id as string);
 

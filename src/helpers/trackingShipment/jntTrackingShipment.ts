@@ -7,9 +7,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 import { phoneManager } from "../jnt/phone";
-import { ProxyInfo, proxyManager } from '../proxy';
-import { aftershipTrackingShipment } from "./aftershipTrackingShipment";
 import { trackingHistManager } from "../jnt/trackingHist";
+import { ProxyInfo } from '../proxy';
+import { aftershipTrackingShipment } from "./aftershipTrackingShipment";
 const trackingUrl = "https://jtexpress.vn/vi/tracking";
 
 const headers = {
@@ -48,25 +48,9 @@ const trackingJnTPage = async ({ codes, bankAccountName }: { codes: string; bank
       error: `No phones available for bank account name: "${bankAccountName}". Please add phones to the pool or check the name.`
     };
   }
-  
-  const proxyList = proxyManager.getAllProxies() ?? [];
+
   try {
-    const requests = phoneList?.map(phone =>
-      processingTracking(phone.trim(), codes, null)
-    ) || [];
-    const results = await Promise.all(requests);
-
-    const flattenedResults = results.flat();
-
-    // Remove duplicate tracking numbers (keep first occurrence)
-    const seenTrackingNumbers = new Set<string>();
-    const dedupedResults = flattenedResults.filter(result => {
-      if (seenTrackingNumbers.has(result.trackingNumber)) {
-        return false;
-      }
-      seenTrackingNumbers.add(result.trackingNumber);
-      return true;
-    });
+    const dedupedResults = await trackWithPhones(phoneList, codes);
 
     const codeLength = codes.split(',').length;
 
@@ -99,7 +83,7 @@ const isHtmlResponse = (data: any): boolean => {
   return /<!DOCTYPE|<html|<div class="result_vandon"/.test(data.substring(0, 500));
 };
 
-const processingTracking = async (cellPhone: string, codes: string, proxy: ProxyInfo | null) => {
+export const processingTracking = async (cellPhone: string, codes: string, proxy: ProxyInfo | null) => {
   const requestConfig: any = {
     params: {
       type: 'track',
@@ -147,19 +131,35 @@ const processingTracking = async (cellPhone: string, codes: string, proxy: Proxy
   }
 };
 
+export const trackWithPhones = async (phones: string[], codes: string): Promise<any[]> => {
+  const results = await Promise.all(phones.map(phone => processingTracking(phone.trim(), codes, null)));
+  const flattenedResults = results.flat();
+
+  const seenTrackingNumbers = new Set<string>();
+  return flattenedResults.filter(result => {
+    if (seenTrackingNumbers.has(result.trackingNumber)) {
+      return false;
+    }
+    seenTrackingNumbers.add(result.trackingNumber);
+    return true;
+  });
+};
+
 export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { codes: string; bankAccountName?: string }) => {
   const trackingData = await trackingJnTPage({ codes, bankAccountName });
   if (trackingData.success) {
     const overallStatus = determineOverallStatus(trackingData?.data ?? []);
     const buffer = await renderShipmentHtml({ success: trackingData?.success, data: trackingData.data ?? [] });
     console.log(`✅ [J&T TRACKING] Tracking completed for codes: ${codes}, Overall Status: ${overallStatus}, Image Size: ${buffer.length} bytes`);
-    await trackingHistManager.addHist(codes, bankAccountName ?? '', "J&T");
     return {
       status: overallStatus,
       buffer: buffer
     };
   } else {
-    await trackingHistManager.addHist(codes, bankAccountName ?? '', "AfterShip");
+    const codesPlitted = codes.split(',').map(code => code.trim()).filter(Boolean);
+    if (codesPlitted.length > 1) {
+      await trackingHistManager.addHist(codes, bankAccountName ?? '', "AfterShip");
+    }
     return aftershipTrackingShipment({ codes, provider: "J&T" });
   }
 };

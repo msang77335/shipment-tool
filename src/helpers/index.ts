@@ -96,7 +96,7 @@ export function isSingPost(providerStr: string) {
 
 export function isDHL(providerStr: string) {
   const upperStr = providerStr.toUpperCase();
-  return upperStr.includes('DHL PAKET');
+  return upperStr.includes('DHL');
 }
 
 export function isGofo(providerStr: string) {

@@ -4,15 +4,16 @@
  */
 
 import Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { DB_NAMES, DB_PATH } from '.';
-import { randomUUID } from 'node:crypto';
 
 export interface JNTTrackingHistEntry {
   id?: string;
   codes: string;
   bankAccountName: string;
   site: "J&T" | "AfterShip";
+  status?: 'pending' | 'processed' | 'failed';
   addedAt?: number;
 }
 
@@ -66,13 +67,24 @@ class JNTTrackingHistDb {
           codes TEXT NOT NULL,
           bankAccountName TEXT,
           site TEXT NOT NULL CHECK(site IN ('J&T', 'AfterShip')),
+          status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processed', 'failed')),
           addedAt INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_site ON ${DB_NAMES.JNT_TRACKING_HIST}(site);
         CREATE INDEX IF NOT EXISTS idx_codes ON ${DB_NAMES.JNT_TRACKING_HIST}(codes);
         CREATE INDEX IF NOT EXISTS idx_bankAccountName ON ${DB_NAMES.JNT_TRACKING_HIST}(bankAccountName);
+        CREATE INDEX IF NOT EXISTS idx_status ON ${DB_NAMES.JNT_TRACKING_HIST}(status);
         CREATE INDEX IF NOT EXISTS idx_addedAt ON ${DB_NAMES.JNT_TRACKING_HIST}(addedAt DESC);
       `);
+
+      // Add status column if it doesn't exist (migration)
+      try {
+        this.db.prepare(`ALTER TABLE ${DB_NAMES.JNT_TRACKING_HIST} ADD COLUMN status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processed', 'failed'))`).run();
+      } catch (err: any) {
+        if (!err.message.includes('duplicate column')) {
+          throw err;
+        }
+      }
 
       // Verify table was created
       const tableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='${DB_NAMES.JNT_TRACKING_HIST}'`).get();
@@ -90,6 +102,27 @@ class JNTTrackingHistDb {
   }
 
   /**
+   * Get a tracking history entry by ID
+   */
+  async getById(id: string): Promise<JNTTrackingHistEntry | null> {
+    if (!this.initialized) throw new Error('Database not initialized');
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const stmt = this.db.prepare(`
+        SELECT id, codes, bankAccountName, site, status, addedAt
+        FROM ${DB_NAMES.JNT_TRACKING_HIST}
+        WHERE id = ?
+      `);
+      const data = stmt.get(id) as JNTTrackingHistEntry;
+      return data || null;
+    } catch (error) {
+      console.error(`❌ [JNT TRACKING HIST DB] Error getting entry by ID:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Add a tracking history entry
    */
   async addEntry(codes: string, bankAccountName: string, site: "J&T" | "AfterShip"): Promise<JNTTrackingHistEntry> {
@@ -101,11 +134,11 @@ class JNTTrackingHistDb {
       const timestamp = Date.now();
 
       const stmt = this.db.prepare(`
-        INSERT INTO ${DB_NAMES.JNT_TRACKING_HIST} (id, codes, bankAccountName, site, addedAt)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO ${DB_NAMES.JNT_TRACKING_HIST} (id, codes, bankAccountName, site, status, addedAt)
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run(id, codes, bankAccountName || null, site, timestamp);
+      stmt.run(id, codes, bankAccountName || null, site, 'pending', timestamp);
 
       console.log(`✅ [JNT TRACKING HIST DB] Added tracking: ${id} (${codes}, ${site})`);
 
@@ -153,7 +186,7 @@ class JNTTrackingHistDb {
 
       // Get paginated data
       const stmt = this.db.prepare(`
-        SELECT id, codes, bankAccountName, site, addedAt
+        SELECT id, codes, bankAccountName, site, status, addedAt
         FROM ${DB_NAMES.JNT_TRACKING_HIST}
         ${whereClause}
         ORDER BY addedAt ${orderBy}
@@ -189,27 +222,68 @@ class JNTTrackingHistDb {
   }
 
   /**
-   * Get total count of tracking history
+   * Get 1 unprocessed AfterShip tracking history entry that is ready for phone scan (has multiple codes)
    */
-  async getCount(site?: "J&T" | "AfterShip"): Promise<number> {
+  async getHistReadyForPhoneScan(): Promise<JNTTrackingHistEntry | null> {
     if (!this.initialized) await this.initialize();
     if (!this.db) throw new Error('Database not initialized');
 
     try {
-      if (site) {
-        const result = this.db.prepare(`
-          SELECT COUNT(*) as count FROM ${DB_NAMES.JNT_TRACKING_HIST}
-          WHERE site = ?
-        `).get(site) as any;
-        return result.count;
-      } else {
-        const result = this.db.prepare(`
-          SELECT COUNT(*) as count FROM ${DB_NAMES.JNT_TRACKING_HIST}
-        `).get() as any;
-        return result.count;
-      }
+      const stmt = this.db.prepare(`
+        SELECT id, codes, bankAccountName, site, status, addedAt
+        FROM ${DB_NAMES.JNT_TRACKING_HIST}
+        WHERE site = 'AfterShip' AND codes LIKE '%,%' AND status = 'pending'
+        ORDER BY addedAt ASC
+        LIMIT 1
+      `);
+
+      const data = stmt.get() as JNTTrackingHistEntry;
+      console.log(`📞 [JNT TRACKING HIST DB] Found ${data ? 1 : 0} entries ready for phone scan`);
+      return data || null;
     } catch (error) {
-      console.error(`❌ [JNT TRACKING HIST DB] Error getting count:`, error);
+      console.error(`❌ [JNT TRACKING HIST DB] Error getting history for phone scan:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark a tracking history entry as processed
+   */
+  async markAsProcessed(id: string): Promise<void> {
+    if (!this.initialized) await this.initialize();
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const stmt = this.db.prepare(`
+        UPDATE ${DB_NAMES.JNT_TRACKING_HIST}
+        SET status = 'processed'
+        WHERE id = ?
+      `);
+      stmt.run(id);
+      console.log(`✅ [JNT TRACKING HIST DB] Marked entry ${id} as processed`);
+    } catch (error) {
+      console.error(`❌ [JNT TRACKING HIST DB] Error marking as processed:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark a tracking history entry as failed
+   */
+  async markAsFailed(id: string): Promise<void> {
+    if (!this.initialized) await this.initialize();
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const stmt = this.db.prepare(`
+        UPDATE ${DB_NAMES.JNT_TRACKING_HIST}
+        SET status = 'failed'
+        WHERE id = ?
+      `);
+      stmt.run(id);
+      console.log(`✅ [JNT TRACKING HIST DB] Marked entry ${id} as failed`);
+    } catch (error) {
+      console.error(`❌ [JNT TRACKING HIST DB] Error marking as failed:`, error);
       throw error;
     }
   }
@@ -250,23 +324,6 @@ class JNTTrackingHistDb {
     } catch (error) {
       console.error(`❌ [JNT TRACKING HIST DB] Error clearing history by date:`, error);
       throw error;
-    }
-  }
-
-  /**
-   * Close database connection
-   */
-  async close(): Promise<void> {
-    if (this.db) {
-      try {
-        this.db.close();
-        this.db = null;
-        this.initialized = false;
-        console.log(`✅ [JNT TRACKING HIST DB] Database closed`);
-      } catch (error) {
-        console.error(`❌ [JNT TRACKING HIST DB] Error closing database:`, error);
-        throw error;
-      }
     }
   }
 }

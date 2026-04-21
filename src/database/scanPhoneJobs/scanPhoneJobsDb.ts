@@ -63,7 +63,7 @@ class ScanPhoneJobsDb {
         CREATE INDEX IF NOT EXISTS idx_codes ON ${DB_NAMES.SCAN_PHONE_JOBS}(codes);
         CREATE INDEX IF NOT EXISTS idx_createdAt ON ${DB_NAMES.SCAN_PHONE_JOBS}(createdAt DESC);
       `);
-      
+
       // Migration: Add paused status support if needed (if table already exists)
       if (this.initialized === false) {
         try {
@@ -97,9 +97,30 @@ class ScanPhoneJobsDb {
   }
 
   /**
+   * Check if a new job can be created (no pending/processing/paused jobs)
+   */
+  async canCreateNewJob(): Promise<boolean> {
+    if (!this.initialized) await this.initialize();
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const count = this.db.prepare(`
+        SELECT COUNT(*) as count
+        FROM ${DB_NAMES.SCAN_PHONE_JOBS}
+        WHERE status IN ('pending', 'processing', 'paused')
+      `).get() as any; 
+
+      return count.count === 0;
+    } catch (error) {
+      console.error(`❌ [SCAN PHONE JOBS DB] Error checking job creation limit:`, error);
+      return true; // Fail open - allow creation if we can't check
+    }
+  }
+
+  /**
    * Create a new job entry
    */
-  async createJob(codes: string): Promise<ScanPhoneJobEntry> {
+  async createJob(codes: string, attemptCount: number): Promise<ScanPhoneJobEntry> {
     if (!this.initialized) await this.initialize();
     if (!this.db) throw new Error('Database not initialized');
 
@@ -108,15 +129,15 @@ class ScanPhoneJobsDb {
       const timestamp = Date.now();
 
       const stmt = this.db.prepare(`
-        INSERT INTO ${DB_NAMES.SCAN_PHONE_JOBS} (id, codes, status, createdAt)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO ${DB_NAMES.SCAN_PHONE_JOBS} (id, codes, status, attemptCount, createdAt)
+        VALUES (?, ?, ?, ?, ?)
       `);
 
-      stmt.run(id, codes, 'pending', timestamp);
+      stmt.run(id, codes, 'pending', attemptCount, timestamp);
 
       console.log(`✅ [SCAN PHONE JOBS DB] Created job: ${id} for codes: ${codes}`);
 
-      return { id, codes, status: 'pending', createdAt: timestamp };
+      return { id, codes, status: 'pending', attemptCount, createdAt: timestamp };
     } catch (error) {
       console.error(`❌ [SCAN PHONE JOBS DB] Error creating job:`, error);
       throw error;
@@ -168,6 +189,29 @@ class ScanPhoneJobsDb {
   }
 
   /**
+   * Update job attempt count (real-time progress tracking during brute force)
+   * Does NOT change job status
+   */
+  async updateAttemptCount(jobId: string, attemptCount: number): Promise<void> {
+    if (!this.initialized) await this.initialize();
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const stmt = this.db.prepare(`
+        UPDATE ${DB_NAMES.SCAN_PHONE_JOBS}
+        SET attemptCount = ?
+        WHERE id = ?
+      `);
+
+      stmt.run(attemptCount, jobId);
+      // Silent update - don't spam logs
+    } catch (error) {
+      console.error(`❌ [SCAN PHONE JOBS DB] Error updating attempt count:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Mark job as completed with success
    */
   async setSuccess(jobId: string, result: any, attemptCount?: number): Promise<void> {
@@ -195,7 +239,7 @@ class ScanPhoneJobsDb {
   /**
    * Mark job as failed with error
    */
-  async setError(jobId: string, error: string): Promise<void> {
+  async setError(jobId: string, error: string, attemptCount?: number): Promise<void> {
     if (!this.initialized) await this.initialize();
     if (!this.db) throw new Error('Database not initialized');
 
@@ -204,11 +248,11 @@ class ScanPhoneJobsDb {
 
       const stmt = this.db.prepare(`
         UPDATE ${DB_NAMES.SCAN_PHONE_JOBS}
-        SET status = ?, error = ?, completedAt = ?
+        SET status = ?, error = ?, attemptCount = ?, completedAt = ?
         WHERE id = ?
       `);
 
-      stmt.run('error', error, timestamp, jobId);
+      stmt.run('error', error, attemptCount || null, timestamp, jobId);
       console.log(`❌ [SCAN PHONE JOBS DB] Job ${jobId} failed: ${error}`);
     } catch (error) {
       console.error(`❌ [SCAN PHONE JOBS DB] Error marking job as error:`, error);
@@ -320,35 +364,6 @@ class ScanPhoneJobsDb {
   }
 
   /**
-   * Clean up old jobs (older than specified days)
-   */
-  async cleanupOldJobs(days: number = 7): Promise<number> {
-    if (!this.initialized) await this.initialize();
-    if (!this.db) throw new Error('Database not initialized');
-
-    try {
-      const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
-
-      const stmt = this.db.prepare(`
-        DELETE FROM ${DB_NAMES.SCAN_PHONE_JOBS}
-        WHERE createdAt < ?
-      `);
-
-      const result = stmt.run(cutoffTime) as any;
-      const deletedCount = result.changes;
-
-      if (deletedCount > 0) {
-        console.log(`🗑️ [SCAN PHONE JOBS DB] Cleaned up ${deletedCount} old jobs (older than ${days} days)`);
-      }
-
-      return deletedCount;
-    } catch (error) {
-      console.error(`❌ [SCAN PHONE JOBS DB] Error cleaning up jobs:`, error);
-      return 0;
-    }
-  }
-
-  /**
    * Delete a job by ID
    */
   async deleteJob(jobId: string): Promise<boolean> {
@@ -373,51 +388,6 @@ class ScanPhoneJobsDb {
     } catch (error) {
       console.error(`❌ [SCAN PHONE JOBS DB] Error deleting job:`, error);
       throw error;
-    }
-  }
-
-  /**
-   * Get job count by status
-   */
-  async getCountByStatus(): Promise<Record<string, number>> {
-    if (!this.initialized) await this.initialize();
-    if (!this.db) throw new Error('Database not initialized');
-
-    try {
-      const stmt = this.db.prepare(`
-        SELECT status, COUNT(*) as count
-        FROM ${DB_NAMES.SCAN_PHONE_JOBS}
-        GROUP BY status
-      `);
-
-      const results = stmt.all() as Array<{ status: string; count: number }>;
-      const counts: Record<string, number> = {};
-
-      results.forEach(row => {
-        counts[row.status] = row.count;
-      });
-
-      return counts;
-    } catch (error) {
-      console.error(`❌ [SCAN PHONE JOBS DB] Error getting counts:`, error);
-      return {};
-    }
-  }
-
-  /**
-   * Close database connection
-   */
-  async close(): Promise<void> {
-    if (this.db) {
-      try {
-        this.db.close();
-        this.db = null;
-        this.initialized = false;
-        console.log(`✅ [SCAN PHONE JOBS DB] Database closed`);
-      } catch (error) {
-        console.error(`❌ [SCAN PHONE JOBS DB] Error closing database:`, error);
-        throw error;
-      }
     }
   }
 }

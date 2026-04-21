@@ -1,5 +1,30 @@
 import { getNextBrowserlessToken } from '..';
 
+const TRACKING_SITE = {
+  TRACKING_MORE: {
+    url: (codes: string) => `https://www.trackingmore.com/track?number=${codes}&express=best-vn`,
+    query: `mutation Screenshot($url: String!) { 
+      viewport(width: 1280, height: 720, deviceScaleFactor: 1) { width height deviceScaleFactor }
+      goto(url: $url, waitUntil: load) { status } 
+      solve { found solved time } 
+      waitForTimeout(time: 15000) { time } 
+      trackingStatus: text(selector: ".num-status-info .status-color") { text }
+      screenshot(type: jpeg) { base64 } 
+    }`
+  },
+  PARCELP_PANEL: {
+    url: (codes: string) => `https://www.parcelpanel.com/track/?tn=${codes}&cd=best-vn`,
+    query: `mutation Screenshot($url: String!) { 
+      viewport(width: 1280, height: 1080, deviceScaleFactor: 1) { width height deviceScaleFactor }
+      goto(url: $url, waitUntil: load) { status } 
+      solve { found solved time } 
+      waitForTimeout(time: 15000) { time } 
+      trackingStatus: text(selector: ".overflow-hidden-line span") { text }
+      screenshot(type: jpeg) { base64 } 
+    }`
+  }
+}
+
 export async function bestExpressTrackingShipment(codes: string): Promise<{ status: string; buffer: Buffer }> {
   console.log(`📍 [BEST EXPRESS] Starting screenshot for tracking: ${codes}`);
 
@@ -12,15 +37,8 @@ export async function bestExpressTrackingShipment(codes: string): Promise<{ stat
   myHeaders.append("Content-Type", "application/json");
 
   const graphql = JSON.stringify({
-    query: `mutation Screenshot($url: String!) { 
-      viewport(width: 1280, height: 720, deviceScaleFactor: 1) { width height deviceScaleFactor }
-      goto(url: $url, waitUntil: load) { status } 
-      solve { found solved time } 
-      waitForTimeout(time: 15000) { time } 
-      trackingStatus: text(selector: ".num-status-info .status-color") { text }
-      screenshot(type: jpeg) { base64 } 
-    }`,
-    variables: { "url": `https://www.trackingmore.com/track?number=${codes}&express=best-vn` }
+    query: TRACKING_SITE.PARCELP_PANEL.query,
+    variables: { "url": TRACKING_SITE.PARCELP_PANEL.url(codes) }
   });
 
   const requestOptions = {
@@ -63,9 +81,9 @@ export async function bestExpressTrackingShipment(codes: string): Promise<{ stat
 
     const isDelivered = trackingStatusText.toUpperCase().includes('DELIVERED');
 
-    return { 
-      status: isDelivered ? 'DELIVERED' : 'UNKNOWN', 
-      buffer: screenshotBuffer 
+    return {
+      status: isDelivered ? 'DELIVERED' : 'UNKNOWN',
+      buffer: screenshotBuffer
     };
   } catch (error) {
     console.error(`💥 [BEST EXPRESS] Error in isBestExpressScreenshouter:`, error);
