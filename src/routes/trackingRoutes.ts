@@ -1,10 +1,11 @@
+import { aftershipTrackingShipment } from '@/helpers/trackingShipment/aftershipTrackingShipment';
 import { Request, Response, Router } from 'express';
 import { isASENDIA, isAustraliaPost, isBestExpress, isCanadaPost, isDHL, isEVRI, isFedEx, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUPS, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
 import { australiaPostTrackingShipment } from '../helpers/trackingShipment/australiaTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
-import { dhlTrackingShipment } from '../helpers/trackingShipment/dhlTrackingShipment';
 import { evriTrackingShipment } from '../helpers/trackingShipment/evriTrackingShipment';
+import { fedexTrackingShipment } from '../helpers/trackingShipment/fedexTrackingShipment';
 import { gofoTrackingShipment } from '../helpers/trackingShipment/gofoTrackingShipment';
 import { jntShipmentTrackingShipment } from '../helpers/trackingShipment/jntTrackingShipment';
 import { singPostTrackingShipment } from '../helpers/trackingShipment/singPostTrackingShipment';
@@ -14,7 +15,6 @@ import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingSh
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
-import { fedexTrackingShipment } from '../helpers/trackingShipment/fedexTrackingShipment';
 
 const router = Router();
 
@@ -46,7 +46,7 @@ const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }
   createProviderHandler(isEVRI, ({ codes }) => evriTrackingShipment({ codes })),
   createProviderHandler(isASENDIA, ({ codes, provider }) => trackingShipment(`https://track.asendia.com/track/${codes}`, provider)),
   createProviderHandler(isSingPost, ({ codes }) => singPostTrackingShipment({ codes })),
-  createProviderHandler(isDHL, ({ codes }) => dhlTrackingShipment({ codes })),
+  createProviderHandler(isDHL, ({ codes, provider }) => aftershipTrackingShipment({ codes, provider })),
   createProviderHandler(isGofo, ({ codes }) => gofoTrackingShipment({ codes })),
   createProviderHandler(isAustraliaPost, ({ codes }) => australiaPostTrackingShipment(codes)),
   createProviderHandler(isUPS, ({ codes }) => upsTrackingShipment({ codes })),
