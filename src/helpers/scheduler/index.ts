@@ -76,9 +76,9 @@ class Scheduler {
 
     console.log(`🔄 [SCHEDULER] Scheduling scan phone job resumption (${CRON_PATTERN})`);
 
-    // this.replaceProxiesTask = cron.schedule(CRON_PATTERN, () => {
-    //   this.executeScanPhoneJobResumption();
-    // });
+    this.replaceProxiesTask = cron.schedule(CRON_PATTERN, () => {
+      this.executeScanPhoneJobResumption();
+    });
 
     console.log('✅ [SCHEDULER] Scan phone job resumption task scheduled');
   }
