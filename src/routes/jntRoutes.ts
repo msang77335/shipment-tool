@@ -596,6 +596,108 @@ router.delete('/tracking-history', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Helper function to add tracking history entries
+ */
+async function addTrackingHistoryEntries(entries: any[]) {
+  const validSites = ["J&T", "AfterShip"];
+  const addedEntries: any[] = [];
+  const errors: string[] = [];
+
+  for (const entry of entries) {
+    try {
+      const { codes, bankAccountName, site } = entry;
+
+      // Validate required fields
+      if (!codes || typeof codes !== 'string' || codes.trim().length === 0) {
+        errors.push('Missing or invalid "codes" field');
+        continue;
+      }
+
+      if (!bankAccountName || typeof bankAccountName !== 'string' || bankAccountName.trim().length === 0) {
+        errors.push('Missing or invalid "bankAccountName" field');
+        continue;
+      }
+
+      if (!site || !validSites.includes(site)) {
+        errors.push(`Invalid site. Expected: ${validSites.join(', ')}`);
+        continue;
+      }
+
+      // Add the entry to tracking history
+      const addedEntry = await trackingHistManager.addHist(codes, bankAccountName.replaceAll(/\s+/g, ''), site);
+      addedEntries.push(addedEntry);
+      console.log(`✅ [JNT TRACKING HIST ROUTE] Added entry: ${codes} for ${bankAccountName} (${site})`);
+    } catch (entryError) {
+      const errorMsg = entryError instanceof Error ? entryError.message : String(entryError);
+      errors.push(`Failed to add entry: ${errorMsg}`);
+      console.error(`❌ [JNT TRACKING HIST ROUTE] Error adding entry:`, entryError);
+    }
+  }
+
+  return { addedEntries, errors };
+}
+
+/**
+ * POST /api/v1/jnt/tracking-history
+ * Add tracking history record(s)
+ * Body: { 
+ *   codes: string (tracking codes, comma-separated),
+ *   bankAccountName: string (seller/account name),
+ *   site: "J&T" | "AfterShip"
+ * }
+ * Can accept array for bulk add:
+ * Body: [
+ *   { codes: string, bankAccountName: string, site: "J&T" | "AfterShip" }
+ * ]
+ * Examples:
+ * - Single: {"codes":"123456,789012","bankAccountName":"seller1","site":"J&T"}
+ * - Bulk: [{"codes":"123","bankAccountName":"seller1","site":"J&T"},...]
+ */
+router.post('/tracking-history', async (req: Request, res: Response) => {
+  try {
+    const body = req.body;
+    
+    // Handle both single object and array of objects
+    const entries = Array.isArray(body) ? body : [body];
+
+    if (entries.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Request body cannot be empty'
+      });
+    }
+
+    const { addedEntries, errors } = await addTrackingHistoryEntries(entries);
+
+    // Return response
+    if (addedEntries.length === 0 && errors.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Failed to add tracking history entries',
+        errors
+      });
+    }
+
+    return res.json({
+      status: 'success',
+      message: `Added ${addedEntries.length} tracking history ${addedEntries.length === 1 ? 'entry' : 'entries'}`,
+      data: addedEntries,
+      addedCount: addedEntries.length,
+      failedCount: errors.length,
+      ...(errors.length > 0 && { errors })
+    });
+  } catch (error) {
+    console.error('❌ [JNT ROUTE] Error adding tracking history:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to add tracking history',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+
 // =============================================================================
 // CHECK QUOTA
 // =============================================================================
