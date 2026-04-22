@@ -7,6 +7,8 @@ const getTrackingURL = (codes: string, provider: string) => {
     return `https://www.aftership.com/track?c=jtexpress-vn&t=${codes}`;
   } else if (isUSPS(provider)) {
     return `https://www.aftership.com/track?c=usps-vn&t=${codes}`;
+  } else if (isAfterShip(provider) && codes.startsWith('LT')) {
+    return `https://www.aftership.com/track/swiss-post/${codes}`;
   } else if (isAfterShip(provider)) {
     return `https://www.aftership.com/track/${codes}`;
   }
