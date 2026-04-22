@@ -222,7 +222,8 @@ class JNTTrackingHistDb {
   }
 
   /**
-   * Get 1 unprocessed AfterShip tracking history entry that is ready for phone scan (has multiple codes)
+   * Get 1 unprocessed AfterShip tracking history entry that is ready for phone scan
+   * Only returns entries from bankAccountNames that have > 2 pending items
    */
   async getHistReadyForPhoneScan(): Promise<JNTTrackingHistEntry | null> {
     if (!this.initialized) await this.initialize();
@@ -233,12 +234,19 @@ class JNTTrackingHistDb {
         SELECT id, codes, bankAccountName, site, status, addedAt
         FROM ${DB_NAMES.JNT_TRACKING_HIST}
         WHERE site = 'AfterShip' AND codes LIKE '%,%' AND status = 'pending'
+        AND bankAccountName IN (
+          SELECT bankAccountName 
+          FROM ${DB_NAMES.JNT_TRACKING_HIST}
+          WHERE site = 'AfterShip' AND status = 'pending'
+          GROUP BY bankAccountName
+          HAVING COUNT(*) >= 2
+        )
         ORDER BY addedAt ASC
         LIMIT 1
       `);
 
       const data = stmt.get() as JNTTrackingHistEntry;
-      console.log(`📞 [JNT TRACKING HIST DB] Found ${data ? 1 : 0} entries ready for phone scan`);
+      console.log(`📞 [JNT TRACKING HIST DB] Found ${data ? 1 : 0} entries ready for phone scan (bankAccountName with > 2 items)`);
       return data || null;
     } catch (error) {
       console.error(`❌ [JNT TRACKING HIST DB] Error getting history for phone scan:`, error);
