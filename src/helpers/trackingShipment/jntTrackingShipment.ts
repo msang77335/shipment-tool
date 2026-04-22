@@ -158,7 +158,8 @@ export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { 
   } else {
     const codesPlitted = codes.split(',').map(code => code.trim()).filter(Boolean);
     if (codesPlitted.length > 1) {
-      await trackingHistManager.addHist(codes, bankAccountName ?? '', "AfterShip");
+      const accountName = bankAccountName?.replaceAll(/\s/g, '') || '';
+      await trackingHistManager.addHist(codes, accountName, "AfterShip");
     }
     return aftershipTrackingShipment({ codes, provider: "J&T" });
   }
