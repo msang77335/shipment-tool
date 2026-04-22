@@ -508,7 +508,7 @@ class ScanPhoneJobManager extends EventEmitter {
 
         const job = createJobResult.job;
         await this.createScanJobRef(job.id, ref.jntTrackingHistId);
-        console.log(`✅ [TRACKING HIST] Created scan job with ID: ${job.id} for account: ${trackingHist.bankAccountName} and tracking code: ${result.billcode}`);
+        console.log(`✅ [EVENT] Created follow-up scan job ${job.id} for tracking history ${ref.jntTrackingHistId} with billcode ${result.billcode} and attemptCount ${attemptCount + 1}`);
         this.runJobInBackground(job.id);
 
       } catch (error) {
