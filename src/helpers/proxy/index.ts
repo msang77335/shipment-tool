@@ -95,6 +95,20 @@ class ProxyManager {
   }
 
   /**
+   * Remove a proxy from the in-memory pool and close its browser contexts.
+   * Does NOT touch the database — use this when the proxy should remain in
+   * proxiesDb for replacement lookup (e.g. when blacklisting).
+   */
+  private async removeFromMemoryPool(proxyServer: string): Promise<void> {
+    const index = this.proxies.findIndex(p => p.server === proxyServer);
+    if (index === -1) return;
+    console.log(`🔌 [PROXY MANAGER] Closing browser instances for proxy: ${proxyServer}`);
+    await PlaywrightBrowserSingleton.closeContextForProxy(proxyServer);
+    this.proxies.splice(index, 1);
+    console.log(`✅ [PROXY MANAGER] Removed proxy from memory pool: ${proxyServer}`);
+  }
+
+  /**
    * Remove proxy from database
    */
   private async removeProxyFromDB(server: string): Promise<void> {
@@ -106,13 +120,16 @@ class ProxyManager {
   }
 
   /**
-   * Sync all proxies to database
+   * Sync proxies to database.
+   * Pass `fullList` to persist ALL proxies (including blacklisted) so they remain
+   * discoverable by replaceProxiesAutomatic after a fresh deploy.
+   * When `fullList` is omitted, only the active in-memory pool is saved.
    */
-  private async syncProxiesToDB(): Promise<void> {
+  private async syncProxiesToDB(fullList?: ProxyInfo[]): Promise<void> {
+    const listToSync = fullList ?? this.proxies;
     try {
-      // Clear DB and resave all current proxies
       await proxiesDb.clearAllProxies();
-      for (const proxy of this.proxies) {
+      for (const proxy of listToSync) {
         await this.saveProxyToDB(proxy);
       }
     } catch (error) {
@@ -181,11 +198,12 @@ class ProxyManager {
     const proxyInfo = proxyServer ? ` (${proxyServer})` : '';
     console.log(`🚫 [BLACKLIST] Added ${provider}${proxyInfo} - Reason: ${reason}`);
 
-    // Automatically remove from pool when a specific proxy is blacklisted
+    // Remove from in-memory pool only — keep in proxiesDb so replaceProxiesAutomatic
+    // can still find this IP when looking up blacklisted proxies to replace.
     if (proxyServer) {
       const inPool = this.proxies.some(p => p.server === proxyServer);
       if (inPool) {
-        await this.removeProxy(proxyServer);
+        await this.removeFromMemoryPool(proxyServer);
         console.log(`🗑️ [BLACKLIST] Auto-removed ${proxyServer} from proxy pool`);
       }
     }
@@ -338,16 +356,18 @@ class ProxyManager {
       const loadResult = await webshareApi.loadFromWebshare();
       reloadedCount = loadResult.loaded;
 
-      // Update proxy pool with new proxies
-      this.proxies = loadResult.proxies;
+      // Filter blacklisted proxies from the in-memory active pool
+      const blacklistEntries = await blacklistDb.getAll();
+      const blacklistedServers = new Set(blacklistEntries.map(e => e.proxyServer).filter(Boolean));
+      this.proxies = loadResult.proxies.filter(p => !blacklistedServers.has(p.server));
 
       // Capture newly added proxies
       newProxies = this.proxies.slice(proxiesBeforeReload);
 
-      console.log(`🔄 [PROXY MANAGER] Reloaded ${reloadedCount} new proxies from Webshare`);
+      console.log(`🔄 [PROXY MANAGER] Reloaded ${reloadedCount} new proxies from Webshare (${this.proxies.length} active)`);
 
-      // Persist updated proxies to database
-      await this.syncProxiesToDB();
+      // Save full list to DB so blacklisted IPs remain findable after redeploy
+      await this.syncProxiesToDB(loadResult.proxies);
     }
 
     return {
@@ -379,8 +399,8 @@ class ProxyManager {
       this.proxies = filtered;
       console.log(`✅ [PROXY MANAGER] Initialized with ${filtered.length} proxies from Webshare (skipped ${skipped} blacklisted)`);
 
-      // Persist to database
-      await this.syncProxiesToDB();
+      // Persist full list (including blacklisted) so replacement logic can find them after redeploy
+      await this.syncProxiesToDB(result.proxies);
     }
   }
 
@@ -500,10 +520,17 @@ class ProxyManager {
     reloadedCount: number;
   }> {
     const loadResult = await webshareApi.loadFromWebshare();
-    this.proxies = loadResult.proxies;
+
+    // Filter blacklisted proxies from the in-memory active pool
+    const blacklistEntries = await blacklistDb.getAll();
+    const blacklistedServers = new Set(blacklistEntries.map(e => e.proxyServer).filter(Boolean));
+    this.proxies = loadResult.proxies.filter(p => !blacklistedServers.has(p.server));
+
     const newProxies = this.proxies.slice(proxiesBeforeReload);
-    console.log(`🔄 [PROXY MANAGER] Reloaded ${loadResult.loaded} new proxies from Webshare`);
-    await this.syncProxiesToDB();
+    console.log(`🔄 [PROXY MANAGER] Reloaded ${loadResult.loaded} new proxies from Webshare (${this.proxies.length} active)`);
+
+    // Save full list to DB so blacklisted IPs remain findable after redeploy
+    await this.syncProxiesToDB(loadResult.proxies);
     return { newProxies, reloadedCount: loadResult.loaded };
   }
 
@@ -532,7 +559,7 @@ class ProxyManager {
     error?: string;
     cleanedBlacklistIps?: string[];
   }> {
-    const excludeIps = new Set(['46.203.157.218', '104.253.212.63']);
+    const excludeIps = new Set([]);
 
     const loadResult = await webshareApi.loadFromWebshare();
     await this.cleanExcludedBlacklistEntries(excludeIps, loadResult.proxies);
