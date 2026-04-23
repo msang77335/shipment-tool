@@ -179,11 +179,11 @@ function determineOverallStatus(shipments: any[]): string {
     const history = shipment.history || [];
     if (history.length === 0) return false;
 
-    const firstEvent = history?.[0]; // First event is most recent in Vietnamese tracking
-    const statusText = firstEvent?.status || '';
-
-    // Check if first event contains "ký nhận" (received/signed)
-    return statusText.includes('ký nhận');
+    // Check if any event contains "Đơn hàng đã ký nhận" (delivered/signed)
+    return history.some((event: any) => {
+      const statusText = (event?.status || '').normalize('NFC');
+      return statusText.includes('Đơn hàng đã ký nhận'.normalize('NFC'));
+    });
   });
 
   return allDelivered ? "DELIVERED" : "UNKNOWN";
