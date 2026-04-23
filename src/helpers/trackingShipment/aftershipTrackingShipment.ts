@@ -168,20 +168,14 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
   const hasBlockingIssue = await checkForQuotaOrBlockingIssues(page);
   if (hasBlockingIssue) {
     console.log(`🛑 [AFTERSHIP] Quota/blocking issue detected on page`);
-    // Add to blacklist and remove from proxy pool
+    // Add to blacklist — removeProxy is called automatically inside addToBlacklist
     const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
-    proxyManager.addToBlacklist({
+    await proxyManager.addToBlacklist({
       provider,
       proxyServer: currentProxyServer,
       reason: 'QUOTA_EXCEEDED',
       code: codes
     });
-
-    // Remove proxy from pool immediately
-    if (currentProxyServer) {
-      await proxyManager.removeProxy(currentProxyServer);
-      console.log(`✅ [AFTERSHIP] Removed proxy ${currentProxyServer} from pool due to QUOTA_EXCEEDED`);
-    }
     return null; // Signal retry with context close
   }
 

@@ -42,15 +42,23 @@ class ProxyManager {
       const dbProxies = await proxiesDb.getAllProxies();
 
       if (dbProxies.length > 0) {
-        // Convert ProxyRecord to ProxyInfo
-        this.proxies = dbProxies.map(record => ({
+        // Load blacklist to filter out blacklisted proxies on startup
+        await blacklistDb.initialize();
+        const blacklistEntries = await blacklistDb.getAll();
+        const blacklistedServers = new Set(blacklistEntries.map(e => e.proxyServer).filter(Boolean));
+
+        // Convert ProxyRecord to ProxyInfo, excluding blacklisted proxies
+        const allProxies = dbProxies.map(record => ({
           server: record.server,
           username: record.username,
           password: record.password,
           bypass: record.bypass,
         }));
 
-        console.log(`✅ [PROXY MANAGER] Loaded ${this.proxies.length} proxies from database`);
+        this.proxies = allProxies.filter(p => !blacklistedServers.has(p.server));
+
+        const skipped = allProxies.length - this.proxies.length;
+        console.log(`✅ [PROXY MANAGER] Loaded ${this.proxies.length} proxies from database (skipped ${skipped} blacklisted)`);
       } else {
         console.log(`📝 [PROXY MANAGER] No proxies found in database, using environment defaults`);
       }
@@ -161,7 +169,6 @@ class ProxyManager {
     reason: 'QUOTA_EXCEEDED' | 'IP_BLOCKED' | 'RATE_LIMITED' | 'OTHER';
     code?: string;
   }): Promise<void> {
-    const key = this.getBlacklistKey(provider, proxyServer);
     const entry: BlacklistEntry = {
       provider,
       proxyServer,
@@ -173,6 +180,15 @@ class ProxyManager {
     await blacklistDb.addEntry(entry);
     const proxyInfo = proxyServer ? ` (${proxyServer})` : '';
     console.log(`🚫 [BLACKLIST] Added ${provider}${proxyInfo} - Reason: ${reason}`);
+
+    // Automatically remove from pool when a specific proxy is blacklisted
+    if (proxyServer) {
+      const inPool = this.proxies.some(p => p.server === proxyServer);
+      if (inPool) {
+        await this.removeProxy(proxyServer);
+        console.log(`🗑️ [BLACKLIST] Auto-removed ${proxyServer} from proxy pool`);
+      }
+    }
   }
 
   /**
@@ -189,13 +205,6 @@ class ProxyManager {
    */
   async getBlacklist(): Promise<BlacklistEntry[]> {
     return blacklistDb.getAll();
-  }
-
-  /**
-   * Generate unique key for blacklist entry
-   */
-  private getBlacklistKey(provider: string, proxyServer?: string): string {
-    return proxyServer ? `${provider}:${proxyServer}` : provider;
   }
 
   /**
@@ -359,8 +368,16 @@ class ProxyManager {
   async initializeWebshare(): Promise<void> {
     const result = await webshareApi.loadFromWebshare();
     if (result.proxies.length > 0) {
-      this.proxies = result.proxies;
-      console.log(`✅ [PROXY MANAGER] Initialized with ${result.proxies.length} proxies from Webshare`);
+      // Filter out blacklisted proxies
+      await blacklistDb.initialize();
+      const blacklistEntries = await blacklistDb.getAll();
+      const blacklistedServers = new Set(blacklistEntries.map(e => e.proxyServer).filter(Boolean));
+
+      const filtered = result.proxies.filter(p => !blacklistedServers.has(p.server));
+      const skipped = result.proxies.length - filtered.length;
+
+      this.proxies = filtered;
+      console.log(`✅ [PROXY MANAGER] Initialized with ${filtered.length} proxies from Webshare (skipped ${skipped} blacklisted)`);
 
       // Persist to database
       await this.syncProxiesToDB();

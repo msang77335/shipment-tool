@@ -203,6 +203,7 @@ export class PlaywrightBrowserSingleton {
         if (context && this.isContextStillValid(context)) {
           console.log(`♻️ [BROWSER-PROXY] Reusing existing context for proxy ${proxyKey}`);
           this.proxyContextIndex = (currentIndex + 1) % this.proxyContextCreationOrder.length;
+          this.currentProxyServer = proxyKey; // Update so getCurrentProxyServer() returns correct proxy
           console.log(`   Queue: [${this.proxyContextCreationOrder.join(', ')}] → Next index: ${this.proxyContextIndex}`);
           return context;
         }
