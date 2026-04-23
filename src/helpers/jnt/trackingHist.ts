@@ -50,6 +50,49 @@ class JNTTrackingHistManager {
     return entry as JNTTrackingHist;
   }
 
+
+  /**
+   * Helper function to add tracking history entries
+   */
+  async addTrackingHistoryEntries(entries: any[]) {
+    const validSites = ["J&T", "AfterShip"];
+    const addedEntries: any[] = [];
+    const errors: string[] = [];
+  
+    for (const entry of entries) {
+      try {
+        const { codes, bankAccountName, site } = entry;
+  
+        // Validate required fields
+        if (!codes || typeof codes !== 'string' || codes.trim().length === 0) {
+          errors.push('Missing or invalid "codes" field');
+          continue;
+        }
+  
+        if (!bankAccountName || typeof bankAccountName !== 'string' || bankAccountName.trim().length === 0) {
+          errors.push('Missing or invalid "bankAccountName" field');
+          continue;
+        }
+  
+        if (!site || !validSites.includes(site)) {
+          errors.push(`Invalid site. Expected: ${validSites.join(', ')}`);
+          continue;
+        }
+  
+        // Add the entry to tracking history
+        const addedEntry = await this.addHist(codes, bankAccountName.replaceAll(/\s+/g, ''), site);
+        addedEntries.push(addedEntry);
+        console.log(`✅ [JNT TRACKING HIST ROUTE] Added entry: ${codes} for ${bankAccountName} (${site})`);
+      } catch (entryError) {
+        const errorMsg = entryError instanceof Error ? entryError.message : String(entryError);
+        errors.push(`Failed to add entry: ${errorMsg}`);
+        console.error(`❌ [JNT TRACKING HIST ROUTE] Error adding entry:`, entryError);
+      }
+    }
+  
+    return { addedEntries, errors };
+  }
+
   /**
    * Clear all tracking history
    */

@@ -7,8 +7,6 @@ const getTrackingURL = (codes: string, provider: string) => {
     return `https://www.aftership.com/track?c=jtexpress-vn&t=${codes}`;
   } else if (isUSPS(provider)) {
     return `https://www.aftership.com/track?c=usps-vn&t=${codes}`;
-  } else if (isAfterShip(provider) && codes.startsWith('LT')) {
-    return `https://www.aftership.com/track/swiss-post/${codes}`;
   } else if (isAfterShip(provider)) {
     return `https://www.aftership.com/track/${codes}`;
   }
@@ -89,7 +87,7 @@ async function checkForQuotaOrBlockingIssues(page: Page): Promise<boolean> {
   console.log(`🔍 [AFTERSHIP] Checking for quota/blocking issues...`);
   return await page.evaluate(() => {
     const pageText = (globalThis as any).document.body.innerText || '';
-    
+
     return pageText.includes('Quota Exceeded');
   });
 }
@@ -178,7 +176,7 @@ async function attemptScreenshot({ page, codes, provider, attempt, maxRetries }:
       reason: 'QUOTA_EXCEEDED',
       code: codes
     });
-    
+
     // Remove proxy from pool immediately
     if (currentProxyServer) {
       await proxyManager.removeProxy(currentProxyServer);
@@ -286,10 +284,10 @@ async function retryScreenshotCapture({ codes, provider, maxRetries }: { codes: 
     } catch (error: any) {
       lastError = error;
       console.error(`💥 [AFTERSHIP] Attempt ${attempt}/${maxRetries} failed:`, error.message);
-      
+
       await cleanupContextOnError(browserContext);
       await closePage(page);
-      
+
       if (attempt < maxRetries) {
         await waitBeforeRetry(attempt);
       }

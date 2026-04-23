@@ -124,6 +124,11 @@ export function isCanadaPost(providerStr: string) {
   return upperStr.includes('CANADA POST') || upperStr.includes('CANPOST');
 }
 
+export function is4PX(providerStr: string) {
+  const upperStr = providerStr.toUpperCase();
+  return upperStr.includes('4PX');
+}
+
 export async function createPage(browserContext: any): Promise<Page> {
   const page = await browserContext.newPage();
   page.setDefaultTimeout(120000);

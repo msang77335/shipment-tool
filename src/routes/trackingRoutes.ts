@@ -1,6 +1,6 @@
 import { aftershipTrackingShipment } from '../helpers/trackingShipment/aftershipTrackingShipment';
 import { Request, Response, Router } from 'express';
-import { isAfterShip, isASENDIA, isAustraliaPost, isBestExpress, isCanadaPost, isEVRI, isFedEx, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUPS, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { is4PX, isAfterShip, isASENDIA, isAustraliaPost, isBestExpress, isCanadaPost, isEVRI, isFedEx, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isUNIUNI, isUPS, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
 import { australiaPostTrackingShipment } from '../helpers/trackingShipment/australiaTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
@@ -15,6 +15,7 @@ import { uspsTrackingShipment } from '../helpers/trackingShipment/uspsTrackingSh
 import { viettelPostTrackingShipment } from '../helpers/trackingShipment/viettelPostTrackingShipment';
 import { vnPostTrackingShipment } from '../helpers/trackingShipment/vnPostTrackingShipment';
 import { ywTrackingShipment } from '../helpers/trackingShipment/ywTrackingShipment';
+import { fourPXTrackingShipment } from '../helpers/trackingShipment/4pxTrackingShipment';
 
 const router = Router();
 
@@ -52,6 +53,7 @@ const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }
   createProviderHandler(isUPS, ({ codes }) => upsTrackingShipment({ codes })),
   createProviderHandler(isFedEx, ({ codes }) => fedexTrackingShipment({ codes })),
   createProviderHandler(isCanadaPost, ({ codes }) => trackingShipment(`https://www.canadapost-postescanada.ca/track-reperage/en/details/${codes}`, 'Canada Post')),
+  createProviderHandler(is4PX, ({ codes }) => fourPXTrackingShipment({ codes })),
 ];
 
 async function getTrackingResult({ codes, provider, bankAccountName }: { codes: string; provider: string; bankAccountName?: string }): Promise<{ status: string; buffer: Buffer } | null> {

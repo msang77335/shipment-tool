@@ -1,348 +1,351 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Danh sách vận đơn</title>
-    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Danh sách vận đơn</title>
+	<script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
 
-        body {
-            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f5f5f5;
-            padding: 20px;
-        }
+		body {
+			font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+			background-color: #f5f5f5;
+			padding: 20px;
+		}
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
+		.container {
+			max-width: 900px;
+			margin: 0 auto;
+		}
 
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
-            text-align: center;
-            font-size: 28px;
-        }
+		h1 {
+			color: #333;
+			margin-bottom: 30px;
+			text-align: center;
+			font-size: 28px;
+		}
 
-        .shipment-card {
-            background: white;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
+		.shipment-card {
+			background: white;
+			border-radius: 8px;
+			margin-bottom: 20px;
+			overflow: hidden;
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+		}
 
-        .shipment-header {
-            background: linear-gradient(135deg, #FFF2F4 0%, #FFE8EC 100%);
-            padding: 16px 20px;
-            border-left: 4px solid #AB1D23;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: background 0.3s ease;
-        }
+		.shipment-header {
+			background: linear-gradient(135deg, #FFF2F4 0%, #FFE8EC 100%);
+			padding: 16px 20px;
+			border-left: 4px solid #AB1D23;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			cursor: pointer;
+			transition: background 0.3s ease;
+		}
 
-        .shipment-header:hover {
-            background: linear-gradient(135deg, #FFE8EC 0%, #FFD9E3 100%);
-        }
+		.shipment-header:hover {
+			background: linear-gradient(135deg, #FFE8EC 0%, #FFD9E3 100%);
+		}
 
-        .tracking-number {
-            font-size: 20px;
-            font-weight: 600;
-            color: #AB1D23;
-        }
+		.tracking-number {
+			font-size: 20px;
+			font-weight: 600;
+			color: #AB1D23;
+		}
 
-        .toggle-icon {
-            color: #FF0000;
-            font-size: 20px;
-            transition: transform 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+		.toggle-icon {
+			color: #FF0000;
+			font-size: 20px;
+			transition: transform 0.3s ease;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
 
-        .toggle-icon ion-icon {
-            font-size: 24px;
-            color: #FF0000;
-        }
+		.toggle-icon ion-icon {
+			font-size: 24px;
+			color: #FF0000;
+		}
 
-        .shipment-header.collapsed .toggle-icon {
-            transform: rotate(-180deg);
-        }
+		.shipment-header.collapsed .toggle-icon {
+			transform: rotate(-180deg);
+		}
 
-        .shipment-content {
-            padding: 20px;
-            max-height: 2000px;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-        }
+		.shipment-content {
+			padding: 20px;
+			max-height: 2000px;
+			overflow: hidden;
+			transition: max-height 0.3s ease;
+		}
 
-        .shipment-header.collapsed ~ .shipment-content {
-            max-height: 0;
-            padding: 0 20px;
-        }
+		.shipment-header.collapsed~.shipment-content {
+			max-height: 0;
+			padding: 0 20px;
+		}
 
-        .tracking-event {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding: 16px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
+		.tracking-event {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			padding: 16px 0;
+			border-bottom: 1px solid #f0f0f0;
+		}
 
-        .tracking-event:last-child {
-            border-bottom: none;
-        }
+		.tracking-event:last-child {
+			border-bottom: none;
+		}
 
-        .event-datetime {
-            display: flex;
-            flex-direction: row;
-            gap: 16px;
-            align-items: center;
-        }
+		.event-datetime {
+			display: flex;
+			flex-direction: row;
+			gap: 16px;
+			align-items: center;
+		}
 
-        .event-time {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 12px;
-            font-weight: 500;
-            color: #888;
-        }
+		.event-time {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			font-size: 12px;
+			font-weight: 500;
+			color: #888;
+		}
 
-        .event-date {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 12px;
-            font-weight: 500;
-            color: #FF0000;
-        }
+		.event-date {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			font-size: 12px;
+			font-weight: 500;
+			color: #FF0000;
+		}
 
-        .icon {
-            width: 16px;
-            height: 16px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
+		.icon {
+			width: 16px;
+			height: 16px;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+		}
 
-        .event-status {
-            flex: 1;
-            font-size: 14px;
-            color: #666;
-            line-height: 1.5;
-            padding-top: 2px;
-        }
+		.event-status {
+			flex: 1;
+			font-size: 14px;
+			color: #666;
+			line-height: 1.5;
+			padding-top: 2px;
+		}
 
-        .highlight-location {
-            color: #1F8DDC;
-            font-weight: 300;
-        }
+		.highlight-location {
+			color: #1F8DDC;
+			font-weight: 300;
+		}
 
-        .event-details {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-top: 8px;
-            font-size: 13px;
-        }
+		.event-details {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 12px;
+			margin-top: 8px;
+			font-size: 13px;
+		}
 
-        .detail-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 8px;
-            background: #f9f9f9;
-            border-radius: 4px;
-        }
+		.detail-item {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			padding: 4px 8px;
+			background: #f9f9f9;
+			border-radius: 4px;
+		}
 
-        .detail-label {
-            color: #999;
-            font-size: 12px;
-        }
+		.detail-label {
+			color: #999;
+			font-size: 12px;
+		}
 
-        .detail-value {
-            color: #1F8DDC;
-            font-weight: 500;
-        }
+		.detail-value {
+			color: #1F8DDC;
+			font-weight: 500;
+		}
 
-        .summary {
-            background: #f9f9f9;
-            padding: 12px 16px;
-            margin: 12px 0 0 0;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 13px;
-        }
+		.summary {
+			background: #f9f9f9;
+			padding: 12px 16px;
+			margin: 12px 0 0 0;
+			border-radius: 4px;
+			display: flex;
+			justify-content: space-between;
+			font-size: 13px;
+		}
 
-        .summary-label {
-            color: #666;
-        }
+		.summary-label {
+			color: #666;
+		}
 
-        .summary-value {
-            color: #333;
-            font-weight: 600;
-        }
+		.summary-value {
+			color: #333;
+			font-weight: 600;
+		}
 
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #999;
-        }
+		.empty-state {
+			text-align: center;
+			padding: 40px 20px;
+			color: #999;
+		}
 
-        .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 12px;
-        }
+		.empty-state-icon {
+			font-size: 48px;
+			margin-bottom: 12px;
+		}
 
-        @media (max-width: 600px) {
-            .container {
-                padding: 0;
-            }
+		@media (max-width: 600px) {
+			.container {
+				padding: 0;
+			}
 
-            .tracking-event {
-                flex-direction: column;
-                gap: 8px;
-            }
+			.tracking-event {
+				flex-direction: column;
+				gap: 8px;
+			}
 
-            .event-datetime {
-                min-width: auto;
-            }
+			.event-datetime {
+				min-width: auto;
+			}
 
-            .shipment-content {
-                padding: 16px;
-            }
-        }
-    </style>
+			.shipment-content {
+				padding: 16px;
+			}
+		}
+	</style>
 </head>
+
 <body>
-    <div class="container">
-        <h1>📦 Danh sách vận đơn</h1>
-        
-        <div id="shipment-list"></div>
-    </div>
+	<div class="container">
+		<h1>📦 Danh sách vận đơn</h1>
 
-    <script>
-        // Data will be injected here by the server
-        const shipmentData = {DATA_PLACEHOLDER};
+		<div id="shipment-list"></div>
+	</div>
 
-        function formatPhoneNumber(phone) {
-            return `<span class="highlight-phone">${phone}</span>`;
-        }
+	<script>
+		// Data will be injected here by the server
+		const shipmentData = { DATA_PLACEHOLDER };
 
-        function formatStatusWithHighlights(status, location) {
-            let formatted = status;
-            
-            // Highlight ALL text inside 【】brackets with link color
-            formatted = formatted.replace(
-                /【([^】]*)】/g,
-                `<span class="highlight-location">【$1】</span>`
-            );
-            
-            return formatted;
-        }
+		function formatPhoneNumber(phone) {
+			return `<span class="highlight-phone">${phone}</span>`;
+		}
 
-        function renderShipments() {
-            const listContainer = document.getElementById('shipment-list');
+		function formatStatusWithHighlights(status, location) {
+			let formatted = status;
 
-            if (!shipmentData || shipmentData.length === 0) {
-                listContainer.innerHTML = `
+			// Highlight ALL text inside 【】brackets with link color
+			formatted = formatted.replace(
+				/【([^】]*)】/g,
+				`<span class="highlight-location">【$1】</span>`
+			);
+
+			return formatted;
+		}
+
+		function renderShipments() {
+			const listContainer = document.getElementById('shipment-list');
+
+			if (!shipmentData || shipmentData.length === 0) {
+				listContainer.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">📭</div>
                         <p>Không có thông tin giao hàng</p>
                     </div>
                 `;
-                return;
-            }
+				return;
+			}
 
-            console.log('Shipment data:', shipmentData);
-            console.log('Number of shipments:', shipmentData.length);
+			console.log('Shipment data:', shipmentData);
+			console.log('Number of shipments:', shipmentData.length);
 
-            const isSingleShipment = shipmentData.length === 1;
+			const isSingleShipment = shipmentData.length === 1;
 
-            const html = shipmentData.map((shipment, shipmentIndex) => {
-                const events = shipment.history || [];
-                console.log(`Shipment ${shipmentIndex} (${shipment.trackingNumber}):`, { eventCount: events.length, isSingleShipment });
-                
-                // If single shipment, show all events; if multiple, show only the first two events
-                const eventsToDisplay = isSingleShipment ? events : events?.slice(0, 2);
-                
-                const eventsHtml = eventsToDisplay?.map((event, index) => {
-                    const formatted = formatStatusWithHighlights(
-                        event.status,
-                        event.location
-                    );
+			const html = shipmentData.map((shipment, shipmentIndex) => {
+				const events = shipment.history || [];
+				console.log(`Shipment ${shipmentIndex} (${shipment.trackingNumber}):`, { eventCount: events.length, isSingleShipment });
 
-                    let details = '';
+				// If single shipment, show all events; if multiple, show only the first two events
+				const eventsToDisplay = isSingleShipment ? events : events?.slice(0, 2);
 
-                    return `
-                        <div class="tracking-event">
-                            <div>
-                                <div class="event-status">${formatted}</div>
-                                ${details}
-                            </div>
-                            <div class="event-datetime">
-                                <div class="event-time">
-                                    <span class="icon">⏱️</span>
-                                    ${event.timestamp || 'N/A'}
-                                </div>
-                                <div class="event-date">
-                                    <span class="icon">📅</span>
-                                    ${event.date || 'N/A'}
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+				const eventsHtml = eventsToDisplay?.map((event, index) => {
+					const formatted = formatStatusWithHighlights(
+						event.status,
+						event.location
+					);
 
-                // If multiple shipments and no events, show placeholder
-                const contentHtml = eventsHtml || '<p style="color: #999; padding: 10px; text-align: center;">Không có sự kiện</p>';
+					let details = '';
 
-                // Always expanded - show all events for single, last event for multiple
-                const collapsedClass = '';
+					return `
+								<div class="tracking-event">
+										<div>
+												<div class="event-status">${formatted}</div>
+												${details}
+										</div>
+										<div class="event-datetime">
+												<div class="event-time">
+														<span class="icon">⏱️</span>
+														${event.timestamp || 'N/A'}
+												</div>
+												<div class="event-date">
+														<span class="icon">📅</span>
+														${event.date || 'N/A'}
+												</div>
+										</div>
+								</div>
+						`;
+				}).join('');
 
-                return `
-                    <div class="shipment-card">
-                        <div class="shipment-header${collapsedClass}" onclick="toggleShipment(this)">
-                            <div class="tracking-number">${shipment.trackingNumber}</div>
-                            <div class="toggle-icon">
-                                <ion-icon name="chevron-up-outline" class="text-[#FF0000]"></ion-icon>
-                            </div>
-                        </div>
-                        <div class="shipment-content">
-                            ${contentHtml}
-                        </div>
-                    </div>
+				// If multiple shipments and no events, show placeholder
+				const contentHtml = eventsHtml || '<p style="color: #999; padding: 10px; text-align: center;">Không có sự kiện</p>';
+
+				// Always expanded - show all events for single, last event for multiple
+				const collapsedClass = '';
+
+				return `
+							<div class="shipment-card">
+									<div class="shipment-header${collapsedClass}" onclick="toggleShipment(this)">
+											<div class="tracking-number">${shipment.trackingNumber}</div>
+											<div class="toggle-icon">
+													<ion-icon name="chevron-up-outline" class="text-[#FF0000]"></ion-icon>
+											</div>
+									</div>
+									<div class="shipment-content">
+											${contentHtml}
+									</div>
+							</div>
                 `;
-            }).join('');
+			}).join('');
 
-            listContainer.innerHTML = html;
-        }
+			listContainer.innerHTML = html;
+		}
 
-        function toggleShipment(headerElement) {
-            headerElement.classList.toggle('collapsed');
-            const icon = headerElement.querySelector('ion-icon');
-            if (icon) {
-                const isCollapsed = headerElement.classList.contains('collapsed');
-                icon.setAttribute('name', isCollapsed ? 'chevron-down-outline' : 'chevron-up-outline');
-            }
-        }
+		function toggleShipment(headerElement) {
+			headerElement.classList.toggle('collapsed');
+			const icon = headerElement.querySelector('ion-icon');
+			if (icon) {
+				const isCollapsed = headerElement.classList.contains('collapsed');
+				icon.setAttribute('name', isCollapsed ? 'chevron-down-outline' : 'chevron-up-outline');
+			}
+		}
 
-        // Render on page load
-        document.addEventListener('DOMContentLoaded', renderShipments);
-    </script>
+		// Render on page load
+		document.addEventListener('DOMContentLoaded', renderShipments);
+	</script>
 </body>
+
 </html>
