@@ -428,16 +428,17 @@ class ProxyManager {
   }
 
   /**
-   * Find the first blacklisted IP that exists in the proxy pool; clean up stale entries
+   * Find the first blacklisted IP that exists in database; clean up stale entries
+   * Checks IP against database proxies, not just memory pool
    */
-  private async findValidIpToProcess(blacklistedIps: string[], currentProxyIps: Set<string>): Promise<{
+  private async findValidIpToProcess(blacklistedIps: string[], dbProxyIps: Set<string>): Promise<{
     ipToProcess: string | null;
     cleanedBlacklistIps: string[];
   }> {
     const cleanedBlacklistIps: string[] = [];
     for (const ip of blacklistedIps) {
-      if (currentProxyIps.has(ip)) return { ipToProcess: ip, cleanedBlacklistIps };
-      console.log(`⚠️  [PROXY MANAGER] Blacklisted IP ${ip} not found in proxy pool - removing from blacklist`);
+      if (dbProxyIps.has(ip)) return { ipToProcess: ip, cleanedBlacklistIps };
+      console.log(`⚠️  [PROXY MANAGER] Blacklisted IP ${ip} not found in database - removing from blacklist`);
       const cleaned = await this.cleanBlacklistEntriesForIp(ip);
       cleanedBlacklistIps.push(...cleaned);
     }
@@ -532,12 +533,15 @@ class ProxyManager {
       };
     }
 
-    const currentProxyIps = new Set(
-      this.proxies.map(p => { try { return new URL(p.server).hostname; } catch { return null; } })
+    // Load all proxies from database to check against blacklist
+    const dbProxies = await proxiesDb.getAllProxies();
+    const dbProxyIps = new Set(
+      dbProxies.map(p => { try { return new URL(p.server).hostname; } catch { return null; } })
         .filter((ip): ip is string => ip !== null)
     );
+    console.log(`📊 [PROXY MANAGER] Database contains ${dbProxyIps.size} unique IPs`);
 
-    const { ipToProcess, cleanedBlacklistIps } = await this.findValidIpToProcess(blacklistedIps, currentProxyIps);
+    const { ipToProcess, cleanedBlacklistIps } = await this.findValidIpToProcess(blacklistedIps, dbProxyIps);
 
     if (!ipToProcess) {
       return {
