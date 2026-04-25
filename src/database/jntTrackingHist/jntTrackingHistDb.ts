@@ -315,6 +315,27 @@ class JNTTrackingHistDb {
   }
 
   /**
+   * Clear history by status
+   */
+  async clearHistByStatus(status: 'pending' | 'processed' | 'failed'): Promise<number> {
+    if (!this.initialized) await this.initialize();
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const stmt = this.db.prepare(`
+        DELETE FROM ${DB_NAMES.JNT_TRACKING_HIST}
+        WHERE status = ?
+      `);
+      const result = stmt.run(status) as any;
+      console.log(`✅ [JNT TRACKING HIST DB] Cleared ${result.changes} entries with status "${status}"`);
+      return result.changes;
+    } catch (error) {
+      console.error(`❌ [JNT TRACKING HIST DB] Error clearing history by status:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Clear history by date range
    */
   async clearHistByDateRange(startTime: number, endTime: number): Promise<number> {

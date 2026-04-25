@@ -488,24 +488,30 @@ class ProxyManager {
   private async removeProxiesFromPool(ips: string[]): Promise<ProxyInfo[]> {
     const removedProxies: ProxyInfo[] = [];
     for (const ip of ips) {
+      // Remove from memory pool if still present (may already be gone after blacklisting)
       const index = this.proxies.findIndex(p => p.server.includes(ip));
-      if (index === -1) continue;
+      if (index !== -1) {
+        const removed = this.proxies[index];
+        removedProxies.push(removed);
+        console.log(`🔌 [PROXY MANAGER] Closing browser instances for IP: ${ip}`);
+        await PlaywrightBrowserSingleton.closeContextForProxy(removed.server);
+        this.proxies.splice(index, 1);
+        console.log(`✅ [PROXY MANAGER] Removed proxy from memory pool: ${ip}`);
+      }
 
-      const removed = this.proxies[index];
-      removedProxies.push(removed);
+      // Always delete from DB and blacklist — this is the replacement step
+      const dbProxies = await proxiesDb.getAllProxies();
+      const dbProxy = dbProxies.find(p => p.server.includes(ip));
+      if (dbProxy) {
+        await this.removeProxyFromDB(dbProxy.server);
+        console.log(`🗑️ [PROXY MANAGER] Removed proxy from DB: ${dbProxy.server}`);
 
-      console.log(`🔌 [PROXY MANAGER] Closing browser instances for IP: ${ip}`);
-      await PlaywrightBrowserSingleton.closeContextForProxy(removed.server);
-
-      this.proxies.splice(index, 1);
-      console.log(`✅ [PROXY MANAGER] Removed proxy with IP: ${ip}`);
-      await this.removeProxyFromDB(removed.server);
-
-      const blacklist = await this.getBlacklist();
-      for (const entry of blacklist) {
-        if (entry.proxyServer === removed.server) {
-          await this.removeFromBlacklist(entry.provider, entry.proxyServer);
-          console.log(`🗑️ [PROXY MANAGER] Removed blacklist entry for proxy ${removed.server}`);
+        const blacklist = await this.getBlacklist();
+        for (const entry of blacklist) {
+          if (entry.proxyServer === dbProxy.server) {
+            await this.removeFromBlacklist(entry.provider, entry.proxyServer);
+            console.log(`🗑️ [PROXY MANAGER] Removed blacklist entry for proxy ${dbProxy.server}`);
+          }
         }
       }
     }

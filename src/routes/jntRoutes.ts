@@ -62,6 +62,54 @@ router.get('/phone', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/v1/jnt/phone/export
+ * Export all phones as a CSV file with format: Seller, Phone, Phone 2, Phone 3, ...
+ * Returns a downloadable CSV file
+ */
+router.get('/phone/export', async (req: Request, res: Response) => {
+  try {
+    const rows = await phoneManager.exportPhones();
+
+    // Find maximum number of phones across all sellers to build dynamic headers
+    const maxPhones = rows.reduce((max, row) => Math.max(max, row.length - 1), 0);
+
+    const phoneHeaders = Array.from({ length: maxPhones }, (_, i) =>
+      i === 0 ? 'Phone' : `Phone ${i + 1}`
+    );
+    const headers = ['Seller', ...phoneHeaders];
+
+    const escape = (value: string) =>
+      value.includes(',') || value.includes('"') || value.includes('\n')
+        ? `"${value.replaceAll('"', '""')}"`
+        : value;
+
+    // Wrap phone values with ="..." so Excel treats them as text, preserving leading zeros
+    const escapePhone = (value: string) => `="${ value.replaceAll('"', '""') }"`;
+
+    const csvLines = [
+      headers.map(escape).join(','),
+      ...rows.map(([seller, ...phones]) => [
+        escape(seller),
+        ...phones.map(escapePhone)
+      ].join(','))
+    ];
+    const csv = csvLines.join('\r\n');
+
+    const filename = `jnt-phones-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(csv);
+  } catch (error) {
+    console.error('❌ [JNT PHONE ROUTE] Error exporting phones:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to export phones',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
  * GET /api/v1/jnt/phone/:name
  * Get phones by specific name
  * Params: name - Account/seller name
@@ -554,10 +602,28 @@ router.get('/tracking-history', async (req: Request, res: Response) => {
  * DELETE /api/v1/jnt/tracking-history
  * Clear all tracking history records
  * Query: ?before=timestamp (optional, date in milliseconds) - Only clear records before this time
+ *        ?status=pending|processed|failed (optional) - Only clear records with this status
  */
 router.delete('/tracking-history', async (req: Request, res: Response) => {
   try {
-    const { before } = req.query;
+    const { before, status } = req.query;
+    const validStatuses = ['pending', 'processed', 'failed'];
+
+    if (status) {
+      if (typeof status !== 'string' || !validStatuses.includes(status)) {
+        return res.status(400).json({
+          status: 'error',
+          message: `Invalid "status" parameter. Valid values are: ${validStatuses.join(', ')}`
+        });
+      }
+
+      const count = await trackingHistManager.clearHistByStatus(status as 'pending' | 'processed' | 'failed');
+      return res.json({
+        status: 'success',
+        message: `Cleared ${count} tracking history entries with status "${status}"`,
+        clearedCount: count
+      });
+    }
 
     if (before) {
       // Clear history before specific timestamp
@@ -569,7 +635,6 @@ router.delete('/tracking-history', async (req: Request, res: Response) => {
         });
       }
 
-      const now = Date.now();
       const count = await trackingHistManager.clearHistByDateRange(0, timestamp);
       return res.json({
         status: 'success',

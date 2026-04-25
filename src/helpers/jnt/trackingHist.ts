@@ -104,6 +104,14 @@ class JNTTrackingHistManager {
   }
 
   /**
+   * Clear history by status
+   */
+  async clearHistByStatus(status: 'pending' | 'processed' | 'failed'): Promise<number> {
+    await this.ensureInitialized();
+    return await jntTrackingHistDb.clearHistByStatus(status);
+  }
+
+  /**
    * Clear history by date range (in milliseconds)
    */
   async clearHistByDateRange(startTime: number, endTime: number): Promise<number> {

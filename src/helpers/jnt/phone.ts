@@ -112,6 +112,18 @@ class JNTPhoneManager {
   }
 
   /**
+   * Export all phones as CSV rows: [seller, phone1, phone2, ...]
+   * Each row corresponds to one seller with all their phones spread across columns.
+   */
+  async exportPhones(): Promise<string[][]> {
+    await this.ensureInitialized();
+    const allPhones = await this.getAllPhones();
+
+    const rows: string[][] = allPhones.map(({ name, phones }) => [name.toUpperCase(), ...phones]);
+    return rows;
+  }
+
+  /**
    * Delete all phones by name
    */
   async deletePhonesByName(name: string): Promise<number> {
