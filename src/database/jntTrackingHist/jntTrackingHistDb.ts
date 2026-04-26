@@ -297,6 +297,24 @@ class JNTTrackingHistDb {
   }
 
   /**
+   * Delete a tracking history entry by ID
+   */
+  async deleteById(id: string): Promise<boolean> {
+    if (!this.initialized) await this.initialize();
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const stmt = this.db.prepare(`DELETE FROM ${DB_NAMES.JNT_TRACKING_HIST} WHERE id = ?`);
+      const result = stmt.run(id) as any;
+      console.log(`✅ [JNT TRACKING HIST DB] Deleted entry ${id} (changes: ${result.changes})`);
+      return result.changes > 0;
+    } catch (error) {
+      console.error(`❌ [JNT TRACKING HIST DB] Error deleting entry by ID:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Clear all tracking history
    */
   async clearHist(): Promise<number> {

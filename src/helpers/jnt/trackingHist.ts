@@ -94,6 +94,22 @@ class JNTTrackingHistManager {
   }
 
   /**
+   * Get a tracking history entry by ID
+   */
+  async getHistById(id: string): Promise<JNTTrackingHist | null> {
+    await this.ensureInitialized();
+    return await jntTrackingHistDb.getById(id) as JNTTrackingHist | null;
+  }
+
+  /**
+   * Delete a tracking history entry by ID
+   */
+  async deleteHistById(id: string): Promise<boolean> {
+    await this.ensureInitialized();
+    return await jntTrackingHistDb.deleteById(id);
+  }
+
+  /**
    * Clear all tracking history
    */
   async clearHist(): Promise<number> {

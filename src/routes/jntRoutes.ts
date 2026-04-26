@@ -599,6 +599,47 @@ router.get('/tracking-history', async (req: Request, res: Response) => {
 });
 
 /**
+ * DELETE /api/v1/jnt/tracking-history/:id
+ * Delete a single tracking history record by ID
+ */
+router.delete('/tracking-history/:id', async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+
+    if (!id || id.trim().length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'ID parameter is required'
+      });
+    }
+
+    const entry = await trackingHistManager.getHistById(id);
+
+    if (!entry) {
+      return res.status(404).json({
+        status: 'not_found',
+        message: `Tracking history entry not found: ${id}`
+      });
+    }
+
+    await trackingHistManager.deleteHistById(id);
+
+    return res.json({
+      status: 'success',
+      message: `Deleted tracking history entry: ${id}`,
+      deletedEntry: entry
+    });
+  } catch (error) {
+    console.error('❌ [JNT ROUTE] Error deleting tracking history entry:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to delete tracking history entry',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
  * DELETE /api/v1/jnt/tracking-history
  * Clear all tracking history records
  * Query: ?before=timestamp (optional, date in milliseconds) - Only clear records before this time
