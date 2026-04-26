@@ -120,6 +120,14 @@ class JNTTrackingHistManager {
   }
 
   /**
+   * Clear history by bankAccountName
+   */
+  async clearHistByBankAccountName(bankAccountName: string): Promise<number> {
+    await this.ensureInitialized();
+    return await jntTrackingHistDb.clearHistByBankAccountName(bankAccountName);
+  }
+
+  /**
    * Clear history by status
    */
   async clearHistByStatus(status: 'pending' | 'processed' | 'failed'): Promise<number> {

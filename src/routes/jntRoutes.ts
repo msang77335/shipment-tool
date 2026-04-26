@@ -647,8 +647,24 @@ router.delete('/tracking-history/:id', async (req: Request, res: Response) => {
  */
 router.delete('/tracking-history', async (req: Request, res: Response) => {
   try {
-    const { before, status } = req.query;
+    const { before, status, bankAccountName } = req.query;
     const validStatuses = ['pending', 'processed', 'failed'];
+
+    if (bankAccountName) {
+      if (typeof bankAccountName !== 'string' || bankAccountName.trim().length === 0) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid "bankAccountName" parameter'
+        });
+      }
+
+      const count = await trackingHistManager.clearHistByBankAccountName(bankAccountName);
+      return res.json({
+        status: 'success',
+        message: `Cleared ${count} tracking history entries for bankAccountName "${bankAccountName}"`,
+        clearedCount: count
+      });
+    }
 
     if (status) {
       if (typeof status !== 'string' || !validStatuses.includes(status)) {
