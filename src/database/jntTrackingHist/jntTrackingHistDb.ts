@@ -75,6 +75,8 @@ class JNTTrackingHistDb {
         CREATE INDEX IF NOT EXISTS idx_bankAccountName ON ${DB_NAMES.JNT_TRACKING_HIST}(bankAccountName);
         CREATE INDEX IF NOT EXISTS idx_status ON ${DB_NAMES.JNT_TRACKING_HIST}(status);
         CREATE INDEX IF NOT EXISTS idx_addedAt ON ${DB_NAMES.JNT_TRACKING_HIST}(addedAt DESC);
+        CREATE INDEX IF NOT EXISTS idx_phonescan ON ${DB_NAMES.JNT_TRACKING_HIST}(addedAt ASC) 
+        WHERE site = 'AfterShip' AND status = 'pending';
       `);
 
       // Add status column if it doesn't exist (migration)
@@ -391,6 +393,31 @@ class JNTTrackingHistDb {
       return result.changes;
     } catch (error) {
       console.error(`❌ [JNT TRACKING HIST DB] Error clearing history by date:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Auto-cleanup: Delete all entries older than 25 days
+   * Can be called periodically via cron job or scheduler
+   */
+  async cleanupOlderThan25Days(): Promise<number> {
+    if (!this.initialized) await this.initialize();
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const cutoffTime = Date.now() - (25 * 24 * 60 * 60 * 1000); // 25 days in milliseconds
+
+      const stmt = this.db.prepare(`
+        DELETE FROM ${DB_NAMES.JNT_TRACKING_HIST}
+        WHERE addedAt < ?
+      `);
+
+      const result = stmt.run(cutoffTime) as any;
+      console.log(`🗑️ [JNT TRACKING HIST DB] Auto-cleanup: Deleted ${result.changes} entries older than 25 days (before ${new Date(cutoffTime).toISOString()})`);
+      return result.changes;
+    } catch (error) {
+      console.error(`❌ [JNT TRACKING HIST DB] Error during cleanup:`, error);
       throw error;
     }
   }

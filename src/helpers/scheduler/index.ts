@@ -6,9 +6,12 @@
 import cron, { ScheduledTask } from 'node-cron';
 import { proxyManager } from '../proxy';
 import { trackingHistManager } from '../jnt/trackingHist';
+import { jntTrackingHistDb } from '../../database/jntTrackingHist';
 
 class Scheduler {
   private replaceProxiesTask: ScheduledTask | null = null;
+  private scanPhoneJobTask: ScheduledTask | null = null;
+  private cleanupTask: ScheduledTask | null = null;
   private isRunning: boolean = false;
 
   /**
@@ -28,6 +31,9 @@ class Scheduler {
 
     // Schedule scan phone job resumption every 30 minutes
     this.scheduleScanPhoneJob();
+
+    // Schedule cleanup of old tracking history every 24 hours
+    this.scheduleCleanupOldTrackingHist();
   }
 
   // Schedule automatic proxy replacement from blacklist
@@ -98,7 +104,41 @@ class Scheduler {
 
     } catch (error) {
       console.error(`❌ [SCHEDULER] Error during scan phone job resumption:`, error);
-    };
+    }
+  }
+
+  /**
+   * Schedule cleanup of old tracking history
+   * Runs every 24 hours at 3 AM using cron pattern
+   * Deletes all entries older than 25 days
+   */
+  private scheduleCleanupOldTrackingHist(): void {
+    const CRON_PATTERN = '0 3 * * *'; // Every day at 3 AM
+
+    console.log(`🔄 [SCHEDULER] Scheduling cleanup of old tracking history (${CRON_PATTERN})`);
+
+    this.cleanupTask = cron.schedule(CRON_PATTERN, () => {
+      this.executeCleanupOldTrackingHist();
+    });
+
+    console.log('✅ [SCHEDULER] Cleanup old tracking history task scheduled');
+  }
+
+  /**
+   * Execute cleanup of old tracking history
+   * Deletes all entries older than 25 days from jnt_tracking_hist
+   */
+  private async executeCleanupOldTrackingHist(): Promise<void> {
+    try {
+      const timestamp = new Date().toISOString();
+      console.log(`⏰ [SCHEDULER] Executing cleanup of old tracking history at ${timestamp}`);
+
+      const deletedCount = await jntTrackingHistDb.cleanupOlderThan25Days();
+
+      console.log(`✅ [SCHEDULER] Cleanup completed: Deleted ${deletedCount} entries older than 25 days`);
+    } catch (error) {
+      console.error(`❌ [SCHEDULER] Error during cleanup of old tracking history:`, error);
+    }
   }
 }
 
