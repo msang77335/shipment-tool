@@ -227,7 +227,7 @@ async function readCaptchaWithGemini(imageBuffer: Buffer): Promise<string> {
     }
     
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
 
     const prompt = `This is a captcha image. Please extract and return ONLY the text/numbers shown in the captcha. Return just the captcha text without any explanation or additional text.`;
 
