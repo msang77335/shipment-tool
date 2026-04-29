@@ -12,6 +12,7 @@ class Scheduler {
   private replaceProxiesTask: ScheduledTask | null = null;
   private scanPhoneJobTask: ScheduledTask | null = null;
   private cleanupTask: ScheduledTask | null = null;
+  private processOldestEntryTask: ScheduledTask | null = null;
   private isRunning: boolean = false;
 
   /**
@@ -34,6 +35,9 @@ class Scheduler {
 
     // Schedule cleanup of old tracking history every 24 hours
     this.scheduleCleanupOldTrackingHist();
+
+    // Schedule process oldest tracking entry at minute 45 of every hour
+    this.scheduleProcessOldestEntry();
   }
 
   // Schedule automatic proxy replacement from blacklist
@@ -138,6 +142,52 @@ class Scheduler {
       console.log(`✅ [SCHEDULER] Cleanup completed: Deleted ${deletedCount} entries older than 25 days`);
     } catch (error) {
       console.error(`❌ [SCHEDULER] Error during cleanup of old tracking history:`, error);
+    }
+  }
+
+  /**
+   * Schedule process oldest tracking entry
+   * Runs every hour at minute 45 using cron pattern
+   * Processes the oldest tracking history entry
+   */
+  private scheduleProcessOldestEntry(): void {
+    const CRON_PATTERN = '45 * * * *'; // Every hour at minute 45
+
+    console.log(`🔄 [SCHEDULER] Scheduling process oldest tracking entry (${CRON_PATTERN})`);
+
+    this.processOldestEntryTask = cron.schedule(CRON_PATTERN, () => {
+      this.executeProcessOldestEntry();
+    });
+
+    console.log('✅ [SCHEDULER] Process oldest tracking entry task scheduled');
+  }
+
+  /**
+   * Execute process oldest tracking entry
+   * - Gets the oldest tracking history entry
+   * - Removes if already processed or successfully tracked with existing phones
+   * - Returns entry details if no removal occurs
+   */
+  private async executeProcessOldestEntry(): Promise<void> {
+    try {
+      const timestamp = new Date().toISOString();
+      console.log(`⏰ [SCHEDULER] Executing process oldest tracking entry at ${timestamp}`);
+
+      const result = await trackingHistManager.processOldestTrackingEntry();
+
+      if (result.success) {
+        if (result.removed) {
+          console.log(`✅ [SCHEDULER] Oldest entry processed and removed: ${result.message}`);
+        } else if (result.entry) {
+          console.log(`ℹ️  [SCHEDULER] Oldest entry processed: ${result.message}`);
+        } else {
+          console.log(`ℹ️  [SCHEDULER] No entries to process: ${result.message}`);
+        }
+      } else {
+        console.error(`❌ [SCHEDULER] Failed to process oldest entry: ${result.message}`);
+      }
+    } catch (error) {
+      console.error(`❌ [SCHEDULER] Error during process oldest tracking entry:`, error);
     }
   }
 }
