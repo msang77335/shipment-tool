@@ -66,7 +66,7 @@ export function isYunExpress(providerStr: string) {
 
 export function isYW(providerStr: string) {
   const upperStr = providerStr.toUpperCase();
-  return upperStr.includes('YW') || upperStr.includes('YANWEN');
+  return upperStr.includes('YW') || upperStr.includes('YANWEN') || upperStr.includes('YAWEN');
 }
 
 export function isOnTrac(providerStr: string) {
