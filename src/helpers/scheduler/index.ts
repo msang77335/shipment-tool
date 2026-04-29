@@ -173,16 +173,18 @@ class Scheduler {
       const timestamp = new Date().toISOString();
       console.log(`⏰ [SCHEDULER] Executing process oldest tracking entry at ${timestamp}`);
 
-      const result = await trackingHistManager.processOldestTrackingEntry();
+      await trackingHistManager.clearHistByStatus('processed');
+
+      const result = await trackingHistManager.processAllTrackingEntries();
 
       if (result.success) {
-        if (result.removed) {
-          console.log(`✅ [SCHEDULER] Oldest entry processed and removed: ${result.message}`);
-        } else if (result.entry) {
-          console.log(`ℹ️  [SCHEDULER] Oldest entry processed: ${result.message}`);
-        } else {
-          console.log(`ℹ️  [SCHEDULER] No entries to process: ${result.message}`);
-        }
+        console.log(`✅ [SCHEDULER] Process oldest tracking entry completed:`);
+        console.log(`   - Total processed: ${result.totalProcessed}`);
+        console.log(`   - Removed: ${result.removed}`);
+        console.log(`   - Tracked: ${result.tracked}`);
+        console.log(`   - Incomplete: ${result.incomplete}`);
+        console.log(`   - Failed: ${result.failed}`);
+        console.log(`   - Not found: ${result.notFound}`);
       } else {
         console.error(`❌ [SCHEDULER] Failed to process oldest entry: ${result.message}`);
       }

@@ -257,30 +257,6 @@ class JNTTrackingHistDb {
   }
 
   /**
-   * Get the oldest tracking history entry
-   */
-  async getOldestEntry(): Promise<JNTTrackingHistEntry | null> {
-    if (!this.initialized) await this.initialize();
-    if (!this.db) throw new Error('Database not initialized');
-
-    try {
-      const stmt = this.db.prepare(`
-        SELECT id, codes, bankAccountName, site, status, addedAt
-        FROM ${DB_NAMES.JNT_TRACKING_HIST}
-        ORDER BY addedAt ASC
-        LIMIT 1
-      `);
-
-      const data = stmt.get() as JNTTrackingHistEntry;
-      console.log(`⏰ [JNT TRACKING HIST DB] Retrieved oldest entry: ${data ? data.id : 'none'}`);
-      return data || null;
-    } catch (error) {
-      console.error(`❌ [JNT TRACKING HIST DB] Error getting oldest entry:`, error);
-      throw error;
-    }
-  }
-
-  /**
    * Mark a tracking history entry as processed
    */
   async markAsProcessed(id: string): Promise<void> {

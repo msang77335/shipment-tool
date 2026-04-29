@@ -1,4 +1,4 @@
-import { jntTrackingHistDb, type PaginationParams, type PaginatedResult } from '../../database/jntTrackingHist';
+import { jntTrackingHistDb, type PaginationParams, type PaginatedResult, type JNTTrackingHistEntry } from '../../database/jntTrackingHist';
 import { phoneManager } from './phone';
 import { scanPhoneJobManager } from './scanPhoneJobManager';
 import { trackWithPhones } from '../trackingShipment/jntTrackingShipment';
@@ -240,111 +240,169 @@ class JNTTrackingHistManager {
   }
 
   /**
-   * Get the oldest tracking history entry
+   * Process all tracking history entries
    * - Removes if status is 'processed'
    * - Checks if phone exists in database and attempts tracking if phones available
    * - Removes if tracking succeeds with existing phones
-   * - Returns entry details if no removal happens
+   * - Returns summary of all processed entries
    */
-  async processOldestTrackingEntry(): Promise<{
+  async processAllTrackingEntries(): Promise<{
     success: boolean;
-    entry: JNTTrackingHist | null;
-    removed: boolean;
+    totalProcessed: number;
+    removed: number;
+    tracked: number;
+    incomplete: number;
+    failed: number;
+    notFound: number;
     message: string;
-    phoneExists?: boolean;
   }> {
     try {
       await this.ensureInitialized();
 
-      const oldestEntry = await jntTrackingHistDb.getOldestEntry();
+      // Get all tracking history entries
+      const result = await jntTrackingHistDb.getAllHist({ limit: 1000 });
+      const entries = result.data;
 
-      if (!oldestEntry) {
-        return {
-          success: true,
-          entry: null,
-          removed: false,
-          message: 'No tracking history entries found'
-        };
+      if (entries.length === 0) {
+        return this.getEmptyProcessingSummary();
       }
 
-      // If status is 'processed', remove it immediately
-      if (oldestEntry.status === 'processed') {
-        const deleted = await jntTrackingHistDb.deleteById(oldestEntry.id!);
-        console.log(`✅ [TRACKING HIST] Removed oldest processed entry: ${oldestEntry.id}`);
-        return {
-          success: true,
-          entry: oldestEntry as JNTTrackingHist,
-          removed: deleted,
-          message: `Entry removed (status: processed): ${oldestEntry.id}`
-        };
-      }
-
-      // Not processed - check if phone exists in jnt phone database
-      const existingPhones = await phoneManager.getPhonesByName(oldestEntry.bankAccountName);
-      const phoneExists = existingPhones && existingPhones.length > 0;
-
-      // If phones exist, attempt tracking
-      if (phoneExists) {
-        try {
-          const trackingResults = await trackWithPhones(existingPhones, oldestEntry.codes);
-
-          // If tracking succeeded with multiple results, remove the entry
-          if (trackingResults.length > 1) {
-            const deleted = await jntTrackingHistDb.deleteById(oldestEntry.id!);
-            console.log(`✅ [TRACKING HIST] Removed oldest entry after successful tracking: ${oldestEntry.id} with phones: ${existingPhones.join(', ')}`);
-            return {
-              success: true,
-              entry: oldestEntry as JNTTrackingHist,
-              removed: deleted,
-              message: `Entry removed (successfully tracked): ${oldestEntry.id}`,
-              phoneExists: true
-            };
-          }
-
-          // Tracking didn't succeed with multiple results
-          console.log(`⚠️  [TRACKING HIST] Oldest entry: tracking with existing phones incomplete (${trackingResults.length} result(s))`);
-          return {
-            success: true,
-            entry: oldestEntry as JNTTrackingHist,
-            removed: false,
-            message: `Entry not removed (status: ${oldestEntry.status}), phones exist but tracking incomplete`,
-            phoneExists: true
-          };
-        } catch (trackError) {
-          console.warn(`⚠️  [TRACKING HIST] Tracking attempt failed for oldest entry:`, trackError);
-          return {
-            success: true,
-            entry: oldestEntry as JNTTrackingHist,
-            removed: false,
-            message: `Entry not removed (status: ${oldestEntry.status}), phones exist but tracking failed`,
-            phoneExists: true
-          };
-        }
-      }
-
-      // No phones found for this entry
-      console.log(`📌 [TRACKING HIST] Oldest entry found - status: ${oldestEntry.status}, phone not found in database`);
-      return {
-        success: true,
-        entry: oldestEntry as JNTTrackingHist,
-        removed: false,
-        message: `Entry not removed (status: ${oldestEntry.status}), phone not found in database`,
-        phoneExists: false
+      const stats = {
+        removed: 0,
+        tracked: 0,
+        incomplete: 0,
+        failed: 0,
+        notFound: 0
       };
+
+      console.log(`⏰ [TRACKING HIST] Processing ${entries.length} entries...`);
+
+      // Process all entries in parallel for better performance
+      await Promise.all(
+        entries.map(entry => this.processSingleEntry(entry, stats))
+      );
+
+      return this.buildProcessingSummary(entries.length, stats);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`❌ [TRACKING HIST] Error getting oldest entry:`, error);
+      console.error(`❌ [TRACKING HIST] Error processing entries:`, error);
       return {
         success: false,
-        entry: null,
-        removed: false,
-        message: 'Failed to process oldest entry',
-        error: errorMsg
-      } as any;
+        totalProcessed: 0,
+        removed: 0,
+        tracked: 0,
+        incomplete: 0,
+        failed: 0,
+        notFound: 0,
+        message: `Failed to process entries: ${errorMsg}`
+      };
     }
   }
 
+  /**
+   * Process a single tracking history entry
+   */
+  private async processSingleEntry(
+    entry: JNTTrackingHistEntry,
+    stats: any
+  ): Promise<void> {
+    try {
+      // If status is 'processed', remove it immediately
+      if (entry.status === 'processed') {
+        await this.removeProcessedEntry(entry, stats);
+        return;
+      }
 
+      // Check if phone exists in jnt phone database
+      const existingPhones = await phoneManager.getPhonesByName(entry.bankAccountName);
+      const phoneExists = existingPhones && existingPhones.length > 0;
+
+      if (!phoneExists) {
+        stats.notFound++;
+        console.log(`📌 [TRACKING HIST] Entry ${entry.id} - phone not found in database`);
+        return;
+      }
+
+      // Attempt tracking with existing phones
+      await this.attemptTracking(entry, existingPhones, stats);
+    } catch (entryError) {
+      console.error(`❌ [TRACKING HIST] Error processing entry ${entry.id}:`, entryError);
+    }
+  }
+
+  /**
+   * Remove a processed entry
+   */
+  private async removeProcessedEntry(entry: JNTTrackingHistEntry, stats: any): Promise<void> {
+    const deleted = await jntTrackingHistDb.deleteById(entry.id!);
+    if (deleted) {
+      stats.removed++;
+      console.log(`✅ [TRACKING HIST] Removed processed entry: ${entry.id}`);
+    }
+  }
+
+  /**
+   * Attempt tracking with existing phones
+   */
+  private async attemptTracking(
+    entry: JNTTrackingHistEntry,
+    existingPhones: string[],
+    stats: any
+  ): Promise<void> {
+    try {
+      const trackingResults = await trackWithPhones(existingPhones, entry.codes);
+
+      // If tracking succeeded with multiple results, remove the entry
+      if (trackingResults.length > 1) {
+        const deleted = await jntTrackingHistDb.deleteById(entry.id!);
+        if (deleted) {
+          stats.tracked++;
+          console.log(`✅ [TRACKING HIST] Removed entry after successful tracking: ${entry.id}`);
+        }
+      } else {
+        stats.incomplete++;
+        console.log(`⚠️  [TRACKING HIST] Entry ${entry.id} - tracking incomplete (${trackingResults.length} result(s))`);
+      }
+    } catch (trackError) {
+      stats.failed++;
+      console.warn(`⚠️  [TRACKING HIST] Entry ${entry.id} - tracking failed:`, trackError);
+    }
+  }
+
+  /**
+   * Build processing summary
+   */
+  private buildProcessingSummary(totalProcessed: number, stats: any) {
+    const summary = {
+      success: true,
+      totalProcessed,
+      removed: stats.removed,
+      tracked: stats.tracked,
+      incomplete: stats.incomplete,
+      failed: stats.failed,
+      notFound: stats.notFound,
+      message: `Processed ${totalProcessed} entries: ${stats.removed} removed, ${stats.tracked} tracked, ${stats.incomplete} incomplete, ${stats.failed} failed, ${stats.notFound} phones not found`
+    };
+
+    console.log(`📊 [TRACKING HIST] Processing complete:`, summary);
+    return summary;
+  }
+
+  /**
+   * Get empty processing summary
+   */
+  private getEmptyProcessingSummary() {
+    return {
+      success: true,
+      totalProcessed: 0,
+      removed: 0,
+      tracked: 0,
+      incomplete: 0,
+      failed: 0,
+      notFound: 0,
+      message: 'No tracking history entries found'
+    };
+  }
 }
 
 export const trackingHistManager = new JNTTrackingHistManager();
