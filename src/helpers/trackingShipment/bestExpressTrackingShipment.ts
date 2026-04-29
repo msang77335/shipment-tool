@@ -34,6 +34,7 @@ export async function bestExpressTrackingShipment(codes: string): Promise<{ stat
   }
 
   const myHeaders = new Headers();
+
   myHeaders.append("Content-Type", "application/json");
 
   const graphql = JSON.stringify({
@@ -50,7 +51,7 @@ export async function bestExpressTrackingShipment(codes: string): Promise<{ stat
   try {
     console.log(`🌐 [BEST EXPRESS] Calling browserless.io API...`);
     const response = await fetch(
-      `https://production-sfo.browserless.io/chromium/bql?token=${token}`,
+      `https://production-sfo.browserless.io/stealth/bql?token=${token}`,
       requestOptions
     );
 
