@@ -179,12 +179,6 @@ class Scheduler {
 
       if (result.success) {
         console.log(`✅ [SCHEDULER] Process oldest tracking entry completed:`);
-        console.log(`   - Total processed: ${result.totalProcessed}`);
-        console.log(`   - Removed: ${result.removed}`);
-        console.log(`   - Tracked: ${result.tracked}`);
-        console.log(`   - Incomplete: ${result.incomplete}`);
-        console.log(`   - Failed: ${result.failed}`);
-        console.log(`   - Not found: ${result.notFound}`);
       } else {
         console.error(`❌ [SCHEDULER] Failed to process oldest entry: ${result.message}`);
       }

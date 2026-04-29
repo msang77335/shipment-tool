@@ -321,7 +321,6 @@ class JNTTrackingHistManager {
 
       if (!phoneExists) {
         stats.notFound++;
-        console.log(`📌 [TRACKING HIST] Entry ${entry.id} - phone not found in database`);
         return;
       }
 
@@ -385,8 +384,6 @@ class JNTTrackingHistManager {
       notFound: stats.notFound,
       message: `Processed ${totalProcessed} entries: ${stats.removed} removed, ${stats.tracked} tracked, ${stats.incomplete} incomplete, ${stats.failed} failed, ${stats.notFound} phones not found`
     };
-
-    console.log(`📊 [TRACKING HIST] Processing complete:`, summary);
     return summary;
   }
 
