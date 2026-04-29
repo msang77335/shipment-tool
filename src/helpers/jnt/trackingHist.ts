@@ -278,9 +278,11 @@ class JNTTrackingHistManager {
       console.log(`⏰ [TRACKING HIST] Processing ${entries.length} entries...`);
 
       // Process all entries in parallel for better performance
-      await Promise.all(
-        entries.map(entry => this.processSingleEntry(entry, stats))
-      );
+      for (const entry of entries) {
+        await this.processSingleEntry(entry, stats)
+
+        await new Promise(resolve => setTimeout(resolve, 30000)); // Add a delay between processing each entry to avoid overwhelming the system and to allow for any asynchronous updates to the database to be reflected in subsequent iterations
+      }
 
       return this.buildProcessingSummary(entries.length, stats);
     } catch (error) {
