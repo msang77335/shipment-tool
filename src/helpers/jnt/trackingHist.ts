@@ -208,7 +208,6 @@ class JNTTrackingHistManager {
         };
       }
 
-      console.warn(`⚠️  [TRACKING HIST] No phones found for account: ${histReadyForScan.bankAccountName}. Creating scan job for tracking code: ${trackingCode}`);
       const createJobResult = await scanPhoneJobManager.createJob(trackingCode);
       if (!createJobResult.success || !createJobResult.job) {
         return {
@@ -220,7 +219,7 @@ class JNTTrackingHistManager {
 
       const job = createJobResult.job;
       await scanPhoneJobManager.createScanJobRef(job.id, histReadyForScan.id!);
-      console.info(`✅ [TRACKING HIST] Created scan job with ID: ${job.id} for account: ${histReadyForScan.bankAccountName} and tracking code: ${trackingCode}`);
+      console.log(`✅ [TRACKING HIST] Created scan job with ID: ${job.id} for account: ${histReadyForScan.bankAccountName} and tracking code: ${trackingCode}`);
       scanPhoneJobManager.runJobInBackground(job.id);
 
       return {
