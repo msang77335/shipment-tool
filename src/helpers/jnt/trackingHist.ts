@@ -219,7 +219,6 @@ class JNTTrackingHistManager {
 
       const job = createJobResult.job;
       await scanPhoneJobManager.createScanJobRef(job.id, histReadyForScan.id!);
-      console.log(`✅ [TRACKING HIST] Created scan job with ID: ${job.id} for account: ${histReadyForScan.bankAccountName} and tracking code: ${trackingCode}`);
       scanPhoneJobManager.runJobInBackground(job.id);
 
       return {
