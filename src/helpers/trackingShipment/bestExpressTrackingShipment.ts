@@ -17,7 +17,6 @@ const TRACKING_SITE = {
     query: `mutation Screenshot($url: String!) { 
       viewport(width: 1280, height: 1080, deviceScaleFactor: 1) { width height deviceScaleFactor }
       goto(url: $url, waitUntil: load) { status } 
-      solve { found solved time } 
       waitForTimeout(time: 15000) { time } 
       trackingStatus: text(selector: ".overflow-hidden-line span") { text }
       screenshot(type: jpeg) { base64 } 
@@ -51,7 +50,7 @@ export async function bestExpressTrackingShipment(codes: string): Promise<{ stat
   try {
     console.log(`🌐 [BEST EXPRESS] Calling browserless.io API...`);
     const response = await fetch(
-      `https://production-sfo.browserless.io/stealth/bql?token=${token}`,
+      `https://production-sfo.browserless.io/stealth/bql?token=${token}&proxy=residential`,
       requestOptions
     );
 
