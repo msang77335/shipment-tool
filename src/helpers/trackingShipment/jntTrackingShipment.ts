@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 import { phoneManager } from "../jnt/phone";
 import { trackingHistManager } from "../jnt/trackingHist";
-import { ProxyInfo } from '../proxy';
+import { ProxyInfo, proxyManager } from '../proxy';
 import { aftershipTrackingShipment } from "./aftershipTrackingShipment";
 const trackingUrl = "https://jtexpress.vn/vi/tracking";
 
@@ -137,12 +137,17 @@ export const trackWithPhones = async (phones: string[], codes: string): Promise<
   const codeCount = codes.split(',').filter(Boolean).length;
   const seenTrackingNumbers = new Set<string>();
   const allResults: any[] = [];
+  const proxies = proxyManager.getAllProxies();
+
+  let proxyIndex = 0;
 
   for (let i = 0; i < phones.length; i += TRACKING_BATCH_SIZE) {
     const batch = phones.slice(i, i + TRACKING_BATCH_SIZE);
     const batchResults: any[] = [];
     for (const phone of batch) {
-      const result = await processingTracking(phone.trim(), codes, null);
+      const proxy = proxies.length > 0 ? proxies[proxyIndex % proxies.length] : null;
+      if (proxies.length > 0) proxyIndex++;
+      const result = await processingTracking(phone.trim(), codes, proxy);
       await new Promise(resolve => setTimeout(resolve, 5000));
       batchResults.push(result);
     }
