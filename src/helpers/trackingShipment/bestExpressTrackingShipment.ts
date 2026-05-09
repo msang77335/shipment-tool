@@ -7,7 +7,7 @@ const TRACKING_SITE = {
       viewport(width: 1280, height: 720, deviceScaleFactor: 1) { width height deviceScaleFactor }
       goto(url: $url, waitUntil: load) { status } 
       solve { found solved time } 
-      waitForTimeout(time: 15000) { time } 
+      waitForTimeout(time: 30000) { time } 
       trackingStatus: text(selector: ".num-status-info .status-color") { text }
       screenshot(type: jpeg) { base64 } 
     }`
@@ -17,7 +17,7 @@ const TRACKING_SITE = {
     query: `mutation Screenshot($url: String!) { 
       viewport(width: 1280, height: 1080, deviceScaleFactor: 1) { width height deviceScaleFactor }
       goto(url: $url, waitUntil: load) { status } 
-      waitForTimeout(time: 15000) { time } 
+      waitForTimeout(time: 30000) { time } 
       trackingStatus: text(selector: ".overflow-hidden-line span") { text }
       screenshot(type: jpeg) { base64 } 
     }`
