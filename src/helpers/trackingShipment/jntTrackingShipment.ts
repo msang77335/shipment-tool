@@ -148,7 +148,7 @@ export const trackWithPhones = async (phones: string[], codes: string): Promise<
       const proxy = proxies.length > 0 ? proxies[proxyIndex % proxies.length] : null;
       if (proxies.length > 0) proxyIndex++;
       const result = await processingTracking(phone.trim(), codes, proxy);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 3500));
       batchResults.push(result);
     }
     const flatBatch = batchResults.flat();
