@@ -19,6 +19,24 @@ import { fourPXTrackingShipment } from '../helpers/trackingShipment/4pxTrackingS
 
 const router = Router();
 
+// J&T request queue: stagger concurrent requests by 13s each
+let jntActiveCount = 0;
+const JNT_STAGGER_DELAY_MS = 13000;
+
+async function withJntQueue<T>(fn: () => Promise<T>): Promise<T> {
+  const waitMs = jntActiveCount * JNT_STAGGER_DELAY_MS;
+  jntActiveCount++;
+  try {
+    if (waitMs > 0) {
+      console.log(`⏳ [JNT QUEUE] Queued request #${jntActiveCount}, waiting ${waitMs / 1000}s before starting...`);
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+    }
+    return await fn();
+  } finally {
+    jntActiveCount--;
+  }
+}
+
 interface TrackingQuery {
   provider: string;
   codes?: string;
@@ -39,7 +57,7 @@ const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }
   createProviderHandler(isYunExpress, ({ codes, provider }) => trackingShipment(`https://www.yuntrack.com/parcelTracking?id=${codes}`, provider)),
   createProviderHandler(isOnTrac, ({ codes, provider }) => trackingShipment(`https://www.ontrac.com/tracking/?number=${codes}`, provider)),
   createProviderHandler(isYW, ({ codes }) => ywTrackingShipment({ codes })),
-  createProviderHandler(isJTExpress, ({ codes, bankAccountName }) => jntShipmentTrackingShipment({ codes, bankAccountName })),
+  createProviderHandler(isJTExpress, ({ codes, bankAccountName }) => withJntQueue(() => jntShipmentTrackingShipment({ codes, bankAccountName }))),
   createProviderHandler(isUSPS, ({ codes }) => uspsTrackingShipment({ codes })),
   createProviderHandler(isVnPost, ({ codes }) => vnPostTrackingShipment(codes)),
   createProviderHandler(isBestExpress, ({ codes }) => bestExpressTrackingShipment(codes)),
