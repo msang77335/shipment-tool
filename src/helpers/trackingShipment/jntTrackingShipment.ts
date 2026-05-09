@@ -143,7 +143,7 @@ export const trackWithPhones = async (phones: string[], codes: string): Promise<
     const batchResults: any[] = [];
     for (const phone of batch) {
       const result = await processingTracking(phone.trim(), codes, null);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       batchResults.push(result);
     }
     const flatBatch = batchResults.flat();
