@@ -90,7 +90,7 @@ export const processingTracking = async (cellPhone: string, codes: string, proxy
       billcode: codes,
       cellphone: cellPhone,
     },
-    timeout: 15000,
+    timeout: 30000,
     validateStatus: () => true,
   };
   try {
@@ -131,18 +131,42 @@ export const processingTracking = async (cellPhone: string, codes: string, proxy
   }
 };
 
-export const trackWithPhones = async (phones: string[], codes: string): Promise<any[]> => {
-  const results = await Promise.all(phones.map(phone => processingTracking(phone.trim(), codes, null)));
-  const flattenedResults = results.flat();
+const TRACKING_BATCH_SIZE = 5;
 
+export const trackWithPhones = async (phones: string[], codes: string): Promise<any[]> => {
+  const codeCount = codes.split(',').filter(Boolean).length;
   const seenTrackingNumbers = new Set<string>();
-  return flattenedResults.filter(result => {
-    if (seenTrackingNumbers.has(result.trackingNumber)) {
-      return false;
+  const allResults: any[] = [];
+
+  for (let i = 0; i < phones.length; i += TRACKING_BATCH_SIZE) {
+    const batch = phones.slice(i, i + TRACKING_BATCH_SIZE);
+    const batchResults: any[] = [];
+    for (const phone of batch) {
+      const result = await processingTracking(phone.trim(), codes, null);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      batchResults.push(result);
     }
-    seenTrackingNumbers.add(result.trackingNumber);
-    return true;
-  });
+    const flatBatch = batchResults.flat();
+
+    for (const result of flatBatch) {
+      if (!seenTrackingNumbers.has(result.trackingNumber)) {
+        seenTrackingNumbers.add(result.trackingNumber);
+        allResults.push(result);
+      }
+    }
+
+    // Early exit once we have results for all tracking codes
+    if (allResults.length >= codeCount) {
+      break;
+    }
+
+    // Small delay between batches to avoid overwhelming the server
+    if (i + TRACKING_BATCH_SIZE < phones.length) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+
+  return allResults;
 };
 
 export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { codes: string; bankAccountName?: string }) => {
