@@ -98,7 +98,7 @@ async function checkTrackingData(page: Page): Promise<boolean> {
 async function getShipmentStatus(page: Page): Promise<string> {
   console.log(`🔍 [UPS] Extracting shipment status...`);
   return await page.evaluate(() => {
-    const statusElement = (globalThis as any).document.querySelector('#st_App_DelvdLabel');
+    const statusElement = (globalThis as any).document.querySelector('.card-header-custom-delived');
     const statusText = statusElement?.textContent?.trim() || '';
 
     if (statusText.toLowerCase().includes('delivered')) {
