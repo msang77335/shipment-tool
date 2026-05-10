@@ -99,7 +99,8 @@ async function getShipmentStatus(page: Page): Promise<string> {
   console.log(`🔍 [UPS] Extracting shipment status...`);
   return await page.evaluate(() => {
     const statusElement = (globalThis as any).document.querySelector('.card-header-custom-delived');
-    const statusText = statusElement?.textContent?.trim() || '';
+    const fallbackStatusElement = (globalThis as any).document.querySelector('.card-header-custom');
+    const statusText = statusElement?.textContent?.trim() || fallbackStatusElement?.textContent?.trim() || '';
 
     if (statusText.toLowerCase().includes('delivered')) {
       return 'DELIVERED';
