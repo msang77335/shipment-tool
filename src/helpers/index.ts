@@ -129,6 +129,11 @@ export function is4PX(providerStr: string) {
   return upperStr.includes('4PX');
 }
 
+export function isSTALLION(providerStr: string) {
+  const upperStr = providerStr.toUpperCase();
+  return upperStr.includes('STALLION') || upperStr.includes('STALION');
+}
+
 export async function createPage(browserContext: any): Promise<Page> {
   const page = await browserContext.newPage();
   page.setDefaultTimeout(120000);
