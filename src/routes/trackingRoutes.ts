@@ -1,6 +1,6 @@
 import { aftershipTrackingShipment } from '../helpers/trackingShipment/aftershipTrackingShipment';
 import { Request, Response, Router } from 'express';
-import { is4PX, isAfterShip, isASENDIA, isAustraliaPost, isBestExpress, isCanadaPost, isEVRI, isFedEx, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPX, isSTALLION, isUNIUNI, isUPS, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
+import { is4PX, isAfterShip, isASENDIA, isAustraliaPost, isBestExpress, isCanadaPost, isEVRI, isFedEx, isGiaoHangNhanh, isGofo, isJTExpress, isOnTrac, isSingPost, isSPEEDX, isSPX, isSTALLION, isUNIUNI, isUPS, isUSPS, isViettelPost, isVnPost, isYunExpress, isYW } from '../helpers';
 import { trackingShipment } from '../helpers/trackingShipment';
 import { australiaPostTrackingShipment } from '../helpers/trackingShipment/australiaTrackingShipment';
 import { bestExpressTrackingShipment } from '../helpers/trackingShipment/bestExpressTrackingShipment';
@@ -74,6 +74,7 @@ const handlers: Array<{ check: (p: string) => boolean; handle: TrackingHandler }
   createProviderHandler(isFedEx, ({ codes }) => fedexTrackingShipment({ codes })),
   createProviderHandler(isCanadaPost, ({ codes }) => trackingShipment(`https://www.canadapost-postescanada.ca/track-reperage/en/details/${codes}`, 'Canada Post')),
   createProviderHandler(is4PX, ({ codes }) => fourPXTrackingShipment({ codes })),
+  createProviderHandler(isSPEEDX, ({ codes }) => trackingShipment(`https://tracking.speedx.io/${codes}`, 'SPEEDX')),
 ];
 
 async function getTrackingResult({ codes, provider, bankAccountName }: { codes: string; provider: string; bankAccountName?: string }): Promise<{ status: string; buffer: Buffer } | null> {

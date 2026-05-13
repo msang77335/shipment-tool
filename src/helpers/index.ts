@@ -10,18 +10,14 @@ export { env, getEnv, getEnvVar, hasEnvVar, requireEnvVar, type EnvConfig, type 
 
 // Browserless Token Rotator
 export {
-  browserlessTokenRotator,
-  getNextBrowserlessToken,
-  hasBrowserlessTokens,
-  getBrowserlessTokenCount
+  browserlessTokenRotator, getBrowserlessTokenCount, getNextBrowserlessToken,
+  hasBrowserlessTokens
 } from './browserlessTokenRotator';
 
 // Gemini API Key Rotator
 export {
-  geminiApiKeyRotator,
-  getNextGeminiApiKey,
-  hasGeminiApiKeys,
-  getGeminiApiKeyCount
+  geminiApiKeyRotator, getGeminiApiKeyCount, getNextGeminiApiKey,
+  hasGeminiApiKeys
 } from './geminiApiKeyRotator';
 
 // Proxy Manager (includes blacklist tracking)
@@ -134,6 +130,11 @@ export function isSTALLION(providerStr: string) {
   return upperStr.includes('STALLION') || upperStr.includes('STALION');
 }
 
+export function isSPEEDX(providerStr: string) {
+  const upperStr = providerStr.toUpperCase();
+  return upperStr.includes('SPEEDX');
+}
+
 export async function createPage(browserContext: any): Promise<Page> {
   const page = await browserContext.newPage();
   page.setDefaultTimeout(120000);
@@ -147,6 +148,7 @@ export async function closePage(page: Page | undefined): Promise<void> {
     await page.close().catch((e: any) => console.log('Error closing page:', e));
   }
 }
+
 
 export async function waitBeforeRetry(attempt: number): Promise<void> {
   const delay = attempt * 3000;
@@ -187,7 +189,7 @@ export async function applyStealthPatches(page: Page): Promise<void> {
     ];
     Object.defineProperty(pluginList, 'item', { value: (i: number) => pluginList[i] });
     Object.defineProperty(pluginList, 'namedItem', { value: (n: string) => pluginList.find((p) => p.name === n) ?? null });
-    Object.defineProperty(pluginList, 'refresh', { value: () => {} });
+    Object.defineProperty(pluginList, 'refresh', { value: () => { } });
     Object.defineProperty(nav, 'plugins', { get: () => pluginList });
 
     Object.defineProperty(nav, 'hardwareConcurrency', { get: () => 8 });

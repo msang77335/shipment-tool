@@ -1,5 +1,5 @@
 import { Page } from "playwright";
-import { isASENDIA, isCanadaPost, isGiaoHangNhanh, isOnTrac, isSPX, isYunExpress } from "../";
+import { isASENDIA, isCanadaPost, isGiaoHangNhanh, isOnTrac, isSPEEDX, isSPX, isYunExpress } from "../";
 import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 
 async function navigateToPage(page: Page, url: string): Promise<void> {
@@ -24,7 +24,7 @@ async function checkTrackingData(page: Page): Promise<boolean> {
   return await page.evaluate(() => {
     const spxHasData = (globalThis as any).document.querySelector('.comp-tracking-milestone-progress-bar');
     const ghnHasData = (globalThis as any).document.querySelector('.order-history-container')?.textContent?.trim().length > 0;
-    
+
     // Check YunExpress has table and not "No data"
     const yunTableHeader = (globalThis as any).document.querySelector('.el-table__header-wrapper');
     const yunNoData = (globalThis as any).document.body?.textContent?.includes('No data');
@@ -38,7 +38,7 @@ async function checkTrackingData(page: Page): Promise<boolean> {
     // Check Canada Post: has data when error message is not visible
     const pageText = (globalThis as any).document.body?.textContent || '';
     const canadaPostHasData = !(pageText.includes("We didn't find an item associated with this number") || pageText.includes('No tracking information'));
-    
+
     return spxHasData || ghnHasData || yunHasData || ontracHasData || canadaPostHasData;
   });
 }
@@ -61,23 +61,23 @@ async function getTrackingStatus(page: Page, provider: string): Promise<string> 
       // All other cases
       return 'UNKNOWN';
     });
-  } else if(isGiaoHangNhanh(provider)) {
+  } else if (isGiaoHangNhanh(provider)) {
     console.log(`📊 [TRACKING SHIPMENT] Getting tracking status for GiaoHangNhanh...`);
     return await page.evaluate(() => {
       // Check for delivery status in table or log items
       const statusElements = (globalThis as any).document.querySelectorAll('.table-col.text-bold, .table-log-item .table-col');
-      
+
       for (const element of statusElements) {
         const statusText = element?.textContent?.trim() || '';
-        
+
         // Check for successful delivery
         if (statusText.includes('Giao hàng thành công') ||
-            statusText.includes('Đã giao hàng') ||
-            statusText.includes('Delivered')) {
+          statusText.includes('Đã giao hàng') ||
+          statusText.includes('Delivered')) {
           return 'DELIVERED';
         }
       }
-      
+
       // All other cases
       return 'UNKNOWN';
     });
@@ -87,15 +87,15 @@ async function getTrackingStatus(page: Page, provider: string): Promise<string> 
       // Check for status element
       const statusElement = (globalThis as any).document.querySelector('.status');
       const statusText = statusElement?.textContent?.trim() || '';
-      
+
       // Check for successful delivery
       if (statusText.includes('Delivered successfully') ||
-          statusText.includes('Giao hàng thành công') ||
-          statusText.includes('Đã giao hàng') ||
-          statusText.includes('Delivered')) {
+        statusText.includes('Giao hàng thành công') ||
+        statusText.includes('Đã giao hàng') ||
+        statusText.includes('Delivered')) {
         return 'DELIVERED';
       }
-      
+
       // All other cases
       return 'UNKNOWN';
     });
@@ -132,17 +132,17 @@ async function getTrackingStatus(page: Page, provider: string): Promise<string> 
       // Method 1: Check delivery_status from table
       const deliveryStatusCell = doc.querySelector('[data-column-id="delivery_status"]');
       const deliveryStatusText = deliveryStatusCell?.textContent?.trim() || '';
-      
-      if (deliveryStatusText.includes('Delivered') || 
-          deliveryStatusText.includes('Giao hàng thành công') || 
-          deliveryStatusText.includes('Đã giao hàng')) {
+
+      if (deliveryStatusText.includes('Delivered') ||
+        deliveryStatusText.includes('Giao hàng thành công') ||
+        deliveryStatusText.includes('Đã giao hàng')) {
         return 'DELIVERED';
       }
 
       // Method 2: Check stepper milestones for completed "Delivered" status
       // The stepper shows steps: find "Delivered" step and check if it's completed
       const stepperButtons = doc.querySelectorAll('.ParcelStatus_stepperMilestone__vqH9j');
-      
+
       // Find the Delivered step (usually the last one with icon-Delivered)
       for (const button of stepperButtons) {
         const icon = button.querySelector('.icon-Delivered');
@@ -167,7 +167,7 @@ async function getTrackingStatus(page: Page, provider: string): Promise<string> 
 
       return 'UNKNOWN';
     });
-  } else if(isCanadaPost(provider)) {
+  } else if (isCanadaPost(provider)) {
     console.log(`📊 [TRACKING SHIPMENT] Getting tracking status for Canada Post...`);
     return await page.evaluate(() => {
       const doc = (globalThis as any).document;
@@ -178,6 +178,23 @@ async function getTrackingStatus(page: Page, provider: string): Promise<string> 
 
       if (deliveredText.includes('Delivered')) {
         return 'DELIVERED';
+      }
+
+      return 'UNKNOWN';
+    });
+  } else if (isSPEEDX(provider)) {
+    console.log(`📊 [TRACKING SHIPMENT] Getting tracking status for SPEEDX...`);
+    await page.setViewportSize({ width: 1500, height: 800 });
+    return await page.evaluate(() => {
+      const doc = (globalThis as any).document;
+
+      // Check for delivered status badge (bg-honeydew text-seagreen with "Delivered" text)
+      const statusBadges = doc.querySelectorAll('.bg-honeydew.text-seagreen');
+      for (const badge of statusBadges) {
+        const text = badge?.textContent?.trim() || '';
+        if (text.toLowerCase().includes('delivered')) {
+          return 'DELIVERED';
+        }
       }
 
       return 'UNKNOWN';
