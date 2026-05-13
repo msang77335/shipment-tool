@@ -46,7 +46,6 @@
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-recaptcha": "^3.6.8",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "sharp": "^0.34.5",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
@@ -57,7 +56,6 @@
     "@types/jest": "^30.0.0",
     "@types/morgan": "^1.9.10",
     "@types/node": "^24.11.0",
-    "@types/sharp": "^0.32.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
     "eslint": "^10.0.2",

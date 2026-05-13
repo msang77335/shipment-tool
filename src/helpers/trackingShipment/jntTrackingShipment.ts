@@ -5,7 +5,6 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import { replace } from "lodash";
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import sharp from 'sharp';
 import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 import { phoneManager } from "../jnt/phone";
 import { trackingHistManager } from "../jnt/trackingHist";
@@ -196,10 +195,7 @@ export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { 
     if (!env.aftershipEnabled) {
       console.warn(`⚠️ [J&T TRACKING] AfterShip is disabled (AFTERSHIP_ENABLED != true). Returning quota-exceeded image.`);
       const quotaExceededPath = join(__dirname, '../../../public', 'aftership-quota-exceeded.png');
-      const buffer = await sharp(readFileSync(quotaExceededPath))
-        .resize({ width: 1200, withoutEnlargement: true })
-        .png()
-        .toBuffer();
+      const buffer = readFileSync(quotaExceededPath);
       return {
         status: "UNKNOWN",
         buffer,
