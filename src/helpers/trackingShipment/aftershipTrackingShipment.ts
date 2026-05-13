@@ -205,16 +205,21 @@ async function handleBlockingIssue(page: Page): Promise<void> {
   }
 }
 
-async function cleanupContextOnError(browserContext: any): Promise<void> {
+async function cleanupContext(browserContext: any): Promise<void> {
   if (browserContext) {
     try {
+      console.log(`🛑 [AFTERSHIP] Cleaning up browser context after tracking attempt...`);
       const currentProxyServer = PlaywrightBrowserSingleton.getCurrentProxyServer();
       if (currentProxyServer) {
+        console.log(`🔄 [AFTERSHIP] Closing context for proxy: ${currentProxyServer}`);
         await PlaywrightBrowserSingleton.closeContextForProxy(currentProxyServer);
+        console.log(`✅ [AFTERSHIP] Context successfully closed for proxy: ${currentProxyServer}`);
       }
     } catch (closeError) {
-      console.error(`⚠️ [AFTERSHIP] Failed to close context on error:`, closeError);
+      console.error(`⚠️ [AFTERSHIP] Failed to close context:`, closeError);
     }
+  } else {
+    console.log(`ℹ️ [AFTERSHIP] No browser context to clean up.`);
   }
 }
 
@@ -268,18 +273,20 @@ async function retryScreenshotCapture({ codes, provider, maxRetries }: { codes: 
       if (result) {
         await closePage(page);
         console.log(`✅ [AFTERSHIP] Successfully captured screenshot on attempt ${attempt}`);
+        await cleanupContext(browserContext); // Ensure cleanup after success
         return result;
       }
 
       const noDataResult = await handleNoDataResult(page, attempt, maxRetries);
       if (noDataResult) {
+        await cleanupContext(browserContext); // Ensure cleanup after no data result
         return noDataResult;
       }
     } catch (error: any) {
       lastError = error;
       console.error(`💥 [AFTERSHIP] Attempt ${attempt}/${maxRetries} failed:`, error.message);
 
-      await cleanupContextOnError(browserContext);
+      await cleanupContext(browserContext);
       await closePage(page);
 
       if (attempt < maxRetries) {
@@ -310,5 +317,7 @@ export async function aftershipTrackingShipment({ codes, provider }: ScreenshotQ
   } catch (error) {
     console.error(`💥 [AFTERSHIP] Error in aftershipTrackingShipment:`, error);
     throw error;
+  } finally {
+    console.log(`📍 [AFTERSHIP] Finished processing tracking: ${codes}`);
   }
 }
