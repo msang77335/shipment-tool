@@ -84,6 +84,8 @@ const isHtmlResponse = (data: any): boolean => {
   return /<!DOCTYPE|<html|<div class="result_vandon"/.test(data.substring(0, 500));
 };
 
+const PROCESSING_TRACKING_MAX_RETRIES = 3;
+
 export const processingTracking = async (cellPhone: string, codes: string, proxy: ProxyInfo | null) => {
   const requestConfig: any = {
     params: {
@@ -91,45 +93,56 @@ export const processingTracking = async (cellPhone: string, codes: string, proxy
       billcode: codes,
       cellphone: cellPhone,
     },
-    timeout: 30000,
+    timeout: 10000,
     validateStatus: () => true,
   };
-  try {
-    if (proxy) {
-      const username = proxy.username?.trim();
-      const password = proxy.password?.trim();
-      let server = proxy.server?.trim();
 
-      // Validate all proxy components are non-empty
-      if (username && password && server) {
-        // Remove protocol prefix if present (proxy.server comes as "http://ip:port")
-        server = server.replace(/^https?:\/\//, '');
+  if (proxy) {
+    const username = proxy.username?.trim();
+    const password = proxy.password?.trim();
+    let server = proxy.server?.trim();
 
-        const encodedUsername = encodeURIComponent(username);
-        const encodedPassword = encodeURIComponent(password);
-        const proxyUrl = `http://${encodedUsername}:${encodedPassword}@${server}`;
-        requestConfig.httpAgent = new HttpProxyAgent(proxyUrl);
-        requestConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-      }
+    // Validate all proxy components are non-empty
+    if (username && password && server) {
+      // Remove protocol prefix if present (proxy.server comes as "http://ip:port")
+      server = server.replace(/^https?:\/\//, '');
+
+      const encodedUsername = encodeURIComponent(username);
+      const encodedPassword = encodeURIComponent(password);
+      const proxyUrl = `http://${encodedUsername}:${encodedPassword}@${server}`;
+      requestConfig.httpAgent = new HttpProxyAgent(proxyUrl);
+      requestConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
     }
-    const response = await axiosclient.get(
-      trackingUrl,
-      requestConfig
-    );
+  }
 
-    if (isHtmlResponse(response.data)) {
-      const parsedShipments = parseHtmlTrackingResponse(response.data);
-      return convertToStandardFormat(parsedShipments);
-    } else if (typeof response.data === 'object' && response.data.success) {
-      return response.data;
-    } else {
-      console.log(`Unexpected response format for ${cellPhone} with codes ${codes}:`, response.data);
+  for (let attempt = 1; attempt <= PROCESSING_TRACKING_MAX_RETRIES; attempt++) {
+    try {
+      const response = await axiosclient.get(
+        trackingUrl,
+        requestConfig
+      );
+
+      if (isHtmlResponse(response.data)) {
+        const parsedShipments = parseHtmlTrackingResponse(response.data);
+        return convertToStandardFormat(parsedShipments);
+      } else if (typeof response.data === 'object' && response.data.success) {
+        return response.data;
+      } else {
+        console.log(`Unexpected response format for ${cellPhone} with codes ${codes}:`, response.data);
+        return [];
+      }
+    } catch (error: any) {
+      const isTimeout = error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT';
+      if (isTimeout && attempt < PROCESSING_TRACKING_MAX_RETRIES) {
+        console.log(`⏱️ Timeout on attempt ${attempt}/${PROCESSING_TRACKING_MAX_RETRIES} for ${cellPhone} with codes ${codes}, retrying...`);
+        continue;
+      }
+      console.log(`Error processing tracking for ${cellPhone} with codes ${codes}:`, error);
       return [];
     }
-  } catch (error) {
-    console.log(`Error processing tracking for ${cellPhone} with codes ${codes}:`, error);
-    return [];
   }
+
+  return [];
 };
 
 const TRACKING_BATCH_SIZE = 5;
@@ -142,32 +155,32 @@ export const trackWithPhones = async (phones: string[], codes: string): Promise<
 
   let proxyIndex = 0;
 
-  for (let i = 0; i < phones.length; i += TRACKING_BATCH_SIZE) {
+  let done = false;
+  for (let i = 0; i < phones.length && !done; i += TRACKING_BATCH_SIZE) {
     const batch = phones.slice(i, i + TRACKING_BATCH_SIZE);
-    const batchResults: any[] = [];
     for (const phone of batch) {
       const proxy = proxies.length > 0 ? proxies[proxyIndex % proxies.length] : null;
       if (proxies.length > 0) proxyIndex++;
       const result = await processingTracking(phone.trim(), codes, proxy);
-      await new Promise(resolve => setTimeout(resolve, 3500));
-      batchResults.push(result);
-    }
-    const flatBatch = batchResults.flat();
 
-    for (const result of flatBatch) {
-      if (!seenTrackingNumbers.has(result.trackingNumber)) {
-        seenTrackingNumbers.add(result.trackingNumber);
-        allResults.push(result);
+      for (const item of (result as any[]).flat()) {
+        if (!seenTrackingNumbers.has(item.trackingNumber)) {
+          seenTrackingNumbers.add(item.trackingNumber);
+          allResults.push(item);
+        }
       }
-    }
 
-    // Early exit once we have results for all tracking codes
-    if (allResults.length >= codeCount) {
-      break;
+      // Early exit as soon as we have results for all tracking codes
+      if (allResults.length >= codeCount) {
+        done = true;
+        break;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 3500));
     }
 
     // Small delay between batches to avoid overwhelming the server
-    if (i + TRACKING_BATCH_SIZE < phones.length) {
+    if (!done && i + TRACKING_BATCH_SIZE < phones.length) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
