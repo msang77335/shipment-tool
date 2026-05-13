@@ -184,7 +184,8 @@ const resizeImageViaPlaywright = async (imagePath: string, width: number): Promi
     }
     page = await browserContext.newPage();
     await page.setViewportSize({ width, height: 1 });
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0}body{width:${width}px}img{width:100%;display:block}</style></head><body><img src="file://${imagePath}"></body></html>`;
+    const base64 = readFileSync(imagePath).toString('base64');
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0}body{width:${width}px}img{width:100%;display:block}</style></head><body><img src="data:image/png;base64,${base64}"></body></html>`;
     await page.setContent(html, { waitUntil: 'networkidle' });
     const screenshot = await page.screenshot({ type: 'png', fullPage: true });
     return Buffer.from(screenshot);
@@ -215,7 +216,7 @@ export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { 
     
     if (!env.aftershipEnabled) {
       console.warn(`⚠️ [J&T TRACKING] AfterShip is disabled (AFTERSHIP_ENABLED != true). Returning quota-exceeded image.`);
-      const quotaExceededPath = join(__dirname, '../../public', 'aftership-quota-exceeded.png');
+      const quotaExceededPath = join(__dirname, '../../../public', 'aftership-quota-exceeded.png');
       const buffer = await resizeImageViaPlaywright(quotaExceededPath, 1200);
       return {
         status: "UNKNOWN",
