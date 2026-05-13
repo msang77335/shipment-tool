@@ -216,7 +216,7 @@ export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { 
     
     if (!env.aftershipEnabled) {
       console.warn(`⚠️ [J&T TRACKING] AfterShip is disabled (AFTERSHIP_ENABLED != true). Returning quota-exceeded image.`);
-      const quotaExceededPath = join(__dirname, '../../../public', 'aftership-quota-exceeded.png');
+      const quotaExceededPath = join(__dirname, '../../public', 'aftership-quota-exceeded.png');
       const buffer = await resizeImageViaPlaywright(quotaExceededPath, 1200);
       return {
         status: "UNKNOWN",
