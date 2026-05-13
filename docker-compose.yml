@@ -30,6 +30,8 @@ services:
       - PROXY_LIST=${PROXY_LIST:-}
       # Webshare API key for proxy management
       - WEBSHARE_API_KEY=${WEBSHARE_API_KEY:-}
+      # Feature Flags
+      - AFTERSHIP_ENABLED=${AFTERSHIP_ENABLED:-false}
 networks:
   automation-net:
     driver: bridge

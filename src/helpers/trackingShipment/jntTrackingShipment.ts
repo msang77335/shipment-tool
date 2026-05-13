@@ -5,10 +5,12 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import { replace } from "lodash";
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import sharp from 'sharp';
 import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 import { phoneManager } from "../jnt/phone";
 import { trackingHistManager } from "../jnt/trackingHist";
 import { ProxyInfo, proxyManager } from '../proxy';
+import { env } from "../env";
 import { aftershipTrackingShipment } from "./aftershipTrackingShipment";
 const trackingUrl = "https://jtexpress.vn/vi/tracking";
 
@@ -190,6 +192,20 @@ export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { 
       const accountName = bankAccountName?.replaceAll(/\s/g, '') || '';
       await trackingHistManager.addHist(codes, accountName, "AfterShip");
     }
+    
+    if (!env.aftershipEnabled) {
+      console.warn(`⚠️ [J&T TRACKING] AfterShip is disabled (AFTERSHIP_ENABLED != true). Returning quota-exceeded image.`);
+      const quotaExceededPath = join(__dirname, '../../../public', 'aftership-quota-exceeded.png');
+      const buffer = await sharp(readFileSync(quotaExceededPath))
+        .resize({ width: 1200, withoutEnlargement: true })
+        .png()
+        .toBuffer();
+      return {
+        status: "UNKNOWN",
+        buffer,
+      };
+    }
+
     return aftershipTrackingShipment({ codes, provider: "J&T" });
   }
 };

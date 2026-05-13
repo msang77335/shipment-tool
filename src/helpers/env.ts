@@ -42,6 +42,9 @@ export interface EnvConfig {
   // Webshare Proxy Mode
   webshareApiKey?: string;
   webshareProxyMode: string;
+
+  // Feature Flags
+  aftershipEnabled: boolean;
 }
 
 /**
@@ -103,6 +106,9 @@ export function getEnv(): EnvConfig {
     webshareApiKey: process.env.WEBSHARE_API_KEY || undefined,
     webshareProxyMode: process.env.WEBSHARE_PROXY_MODE || 'direct',
     proxies: parseProxies(),
+
+    // Feature Flags
+    aftershipEnabled: process.env.AFTERSHIP_ENABLED === 'true',
   };
 }
 
