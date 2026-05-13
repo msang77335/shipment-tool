@@ -9,7 +9,6 @@ import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleto
 import { phoneManager } from "../jnt/phone";
 import { trackingHistManager } from "../jnt/trackingHist";
 import { ProxyInfo, proxyManager } from '../proxy';
-import { env } from "../env";
 import { aftershipTrackingShipment } from "./aftershipTrackingShipment";
 const trackingUrl = "https://jtexpress.vn/vi/tracking";
 
@@ -227,8 +226,8 @@ export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { 
       await trackingHistManager.addHist(codes, accountName, "AfterShip");
     }
     
-    if (!env.aftershipEnabled) {
-      console.warn(`⚠️ [J&T TRACKING] AfterShip is disabled (AFTERSHIP_ENABLED != true). Returning quota-exceeded image.`);
+    if (codes?.split(',').length > 1) {
+      console.warn(`⚠️ [J&T TRACKING] Tracking failed for multiple codes: ${codes}. Falling back to AfterShip tracking.`);
       const quotaExceededPath = join(__dirname, '../../public', 'aftership-quota-exceeded.png');
       const buffer = await resizeImageViaPlaywright(quotaExceededPath, 1200);
       return {
