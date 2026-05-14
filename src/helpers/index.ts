@@ -87,7 +87,7 @@ export function isASENDIA(providerStr: string) {
 
 export function isSingPost(providerStr: string) {
   const upperStr = providerStr.toUpperCase();
-  return upperStr.includes('SINGPOST') || upperStr.includes('SING POST');
+  return upperStr.includes('SINGPOST') || upperStr.includes('SING POST') || upperStr.includes('SINGAPORE');
 }
 
 export function isAfterShip(providerStr: string) {
@@ -148,7 +148,6 @@ export async function closePage(page: Page | undefined): Promise<void> {
     await page.close().catch((e: any) => console.log('Error closing page:', e));
   }
 }
-
 
 export async function waitBeforeRetry(attempt: number): Promise<void> {
   const delay = attempt * 3000;

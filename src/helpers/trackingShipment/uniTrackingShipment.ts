@@ -2,7 +2,9 @@ import { Page } from "playwright";
 import { captureLastAttemptScreenshot, captureScreenshot, closePage, createPage, waitBeforeRetry } from "..";
 import { PlaywrightBrowserSingleton } from "../browser/PlaywrightBrowserSingleton";
 
-async function navigateAndTracking(page: Page, trackingURL: string, codes: string, attempt: number, maxRetries: number) {
+type UniuniNavigateState = 'READY' | 'INVALID' | 'NO_DATA';
+
+async function navigateAndTracking(page: Page, trackingURL: string, codes: string, attempt: number, maxRetries: number): Promise<UniuniNavigateState> {
   console.log(`🌐 [UNIUNI] Navigating to uniuni.com (attempt ${attempt}/${maxRetries})...`);
   await page.goto(trackingURL, {
     waitUntil: 'domcontentloaded'
@@ -16,16 +18,34 @@ async function navigateAndTracking(page: Page, trackingURL: string, codes: strin
   console.log(`⌨️ [UNIUNI] Clicking Track button...`);
   await page.click('.track-btn');
 
-  console.log(`⏳ [UNIUNI] Waiting 10 seconds for content to load...`);
-  await new Promise(resolve => setTimeout(resolve, 10000));
+  console.log(`⏳ [UNIUNI] Waiting 20 seconds for content to load...`);
+  await new Promise(resolve => setTimeout(resolve, 20000));
+
+  const hasInvalidOverview = await checkInvalidTrackingData(page);
+  if (hasInvalidOverview) {
+    console.log(`⚠️ [UNIUNI] Invalid tracking code / no information available`);
+    return 'INVALID';
+  }
+
+  const hasOverview = await page.$('.overview');
+  if (!hasOverview) {
+    console.log(`⚠️ [UNIUNI] Overview section not found`);
+    return 'NO_DATA';
+  }
 
   console.log(`🖱️ [UNIUNI] Clicking overview div to open detail...`);
   await page.click('.overview');
 
   console.log(`⏳ [UNIUNI] Waiting for detail to be visible...`);
-  await page.waitForSelector('.detail-list', { state: 'visible', timeout: 10000 });
+  try {
+    await page.waitForSelector('.detail-list', { state: 'visible', timeout: 10000 });
+  } catch {
+    console.log(`⚠️ [UNIUNI] Detail section did not become visible`);
+    return 'NO_DATA';
+  }
 
   await new Promise(resolve => setTimeout(resolve, 5000));
+  return 'READY';
 }
 
 async function getShipmentStatus(page: Page): Promise<string> {
@@ -50,9 +70,33 @@ async function checkTrackingData(page: Page): Promise<boolean> {
   });
 }
 
+async function checkInvalidTrackingData(page: Page): Promise<boolean> {
+  console.log(`🔍 [UNIUNI] Checking for invalid tracking message...`);
+  return await page.evaluate(() => {
+    const doc = (globalThis as any).document;
+    const invalidContainer = doc.querySelector('.invalid-overview-all, #invalid-overview, .invalid-content');
+    if (invalidContainer) {
+      return true;
+    }
+
+    const bodyText = (doc.body?.textContent || '').toLowerCase();
+    return bodyText.includes('no information for the following package(s) is currently available');
+  });
+}
+
 async function attemptScreenshot({ page, codes, attempt, maxRetries }: { page: Page; codes: string; attempt: number; maxRetries: number; }): Promise<{ buffer: Buffer; status: string } | null> {
   const trackingURL = 'https://www.uniuni.com/tracking/';
-  await navigateAndTracking(page, trackingURL, codes, attempt, maxRetries);
+  const navigateState = await navigateAndTracking(page, trackingURL, codes, attempt, maxRetries);
+
+  if (navigateState === 'INVALID') {
+    const buffer = await captureScreenshot(page, 1400, 900);
+    return { buffer, status: 'UNKNOWN' };
+  }
+
+  if (navigateState !== 'READY') {
+    return null;
+  }
+
   const hasTrackingData = await checkTrackingData(page);
 
   if (hasTrackingData) {
