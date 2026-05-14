@@ -152,14 +152,11 @@ export const trackWithPhones = async (phones: string[], codes: string): Promise<
   const allResults: any[] = [];
   const proxies = proxyManager.getAllProxies();
 
-  let proxyIndex = 0;
-
   let done = false;
   for (let i = 0; i < phones.length && !done; i += TRACKING_BATCH_SIZE) {
     const batch = phones.slice(i, i + TRACKING_BATCH_SIZE);
     for (const phone of batch) {
-      const proxy = proxies.length > 0 ? proxies[proxyIndex % proxies.length] : null;
-      if (proxies.length > 0) proxyIndex++;
+      const proxy = proxies.length > 0 ? proxies[Math.floor(Math.random() * proxies.length)] : null;
       const result = await processingTracking(phone.trim(), codes, proxy);
 
       for (const item of (result as any[]).flat()) {
