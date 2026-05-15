@@ -72,7 +72,7 @@ export function isOnTrac(providerStr: string) {
 
 export function isUNIUNI(providerStr: string) {
   const upperStr = providerStr.toUpperCase();
-  return upperStr.includes('UNIUNI');
+  return upperStr.includes('UNIUNI') || upperStr.includes('UNI');
 }
 
 export function isEVRI(providerStr: string) {

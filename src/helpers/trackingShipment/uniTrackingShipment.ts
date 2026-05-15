@@ -74,13 +74,11 @@ async function checkInvalidTrackingData(page: Page): Promise<boolean> {
   console.log(`🔍 [UNIUNI] Checking for invalid tracking message...`);
   return await page.evaluate(() => {
     const doc = (globalThis as any).document;
-    const invalidContainer = doc.querySelector('.invalid-overview-all, #invalid-overview, .invalid-content');
+    const invalidContainer = doc.querySelector('.invalid-info-large');
     if (invalidContainer) {
       return true;
     }
-
-    const bodyText = (doc.body?.textContent || '').toLowerCase();
-    return bodyText.includes('no information for the following package(s) is currently available');
+    return false;
   });
 }
 
