@@ -23,7 +23,7 @@ RUN npm run build
 # =============================================
 FROM node:20-bookworm-slim AS production
 
-# Install Xvfb + Chrome system dependencies for Playwright & Puppeteer
+# Install Xvfb + Chrome system dependencies for Playwright & Puppeteer + build tools for native addons
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     libnspr4 \
@@ -42,6 +42,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     libpango-1.0-0 \
     libcairo2 \
+    python3 \
+    make \
+    g++ \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -50,7 +53,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev \
     && npx playwright install --with-deps firefox \
-    && npx puppeteer browsers install chrome
+    && npx puppeteer browsers install chrome \
+    && apt-get purge -y --auto-remove python3 make g++
 
 # Copy built app from builder stage
 COPY --from=builder /app/dist ./dist
