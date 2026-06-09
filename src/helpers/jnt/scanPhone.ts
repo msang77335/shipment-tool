@@ -13,8 +13,8 @@ interface AxiosRequestConfig {
   timeout?: number;
   validateStatus?: () => boolean;
   headers?: Record<string, string>;
-  httpAgent?: HttpProxyAgent<any>;
-  httpsAgent?: HttpsProxyAgent<any>;
+  httpAgent?: HttpProxyAgent;
+  httpsAgent?: HttpsProxyAgent;
 }
 
 export class PhoneBruteForceFinder {
