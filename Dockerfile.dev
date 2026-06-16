@@ -52,11 +52,11 @@ WORKDIR /app
 
 # Force node-gyp to use python3 when compiling native addons (e.g. better-sqlite3)
 ENV PYTHON=/usr/bin/python3
+ENV npm_config_python=/usr/bin/python3
 
 # Install production dependencies, Playwright Firefox, and Chrome for Puppeteer
 COPY package*.json ./
-RUN npm config set python /usr/bin/python3 \
-    && npm install --omit=dev \
+RUN npm install --omit=dev \
     && npx playwright install --with-deps firefox \
     && npx puppeteer browsers install chrome
 
