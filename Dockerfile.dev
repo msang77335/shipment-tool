@@ -42,13 +42,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     libpango-1.0-0 \
     libcairo2 \
+        python3 \
+        python-is-python3 \
+        make \
+        g++ \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Force node-gyp to use python3 when compiling native addons (e.g. better-sqlite3)
+ENV PYTHON=/usr/bin/python3
+
 # Install production dependencies, Playwright Firefox, and Chrome for Puppeteer
 COPY package*.json ./
-RUN npm install --omit=dev \
+RUN npm config set python /usr/bin/python3 \
+    && npm install --omit=dev \
     && npx playwright install --with-deps firefox \
     && npx puppeteer browsers install chrome
 
