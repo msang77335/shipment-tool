@@ -366,6 +366,79 @@ export class PlaywrightBrowserSingleton {
   }
 
   /**
+   * Close all browser contexts and browsers
+   * Closes all proxy-based contexts, non-proxy contexts, and browser instances
+   */
+  static async closeAllContexts(): Promise<void> {
+    console.log(`🔌 [CLOSE ALL] Starting to close all browser contexts and instances...`);
+
+    // Close all proxy-based contexts
+    for (const [proxyServer, context] of this.contextPool.entries()) {
+      if (context) {
+        try {
+          console.log(`🔌 [CLOSE ALL] Closing context for proxy ${proxyServer}...`);
+          await context.close();
+          console.log(`✅ [CLOSE ALL] Context closed for proxy ${proxyServer}`);
+        } catch (error: any) {
+          console.error(`⚠️ [CLOSE ALL] Error closing context for ${proxyServer}: ${error.message}`);
+        }
+      }
+    }
+
+    // Close all proxy-based browsers
+    for (const [proxyServer, browser] of this.browserPool.entries()) {
+      if (browser) {
+        try {
+          console.log(`🔌 [CLOSE ALL] Closing browser instance for proxy ${proxyServer}...`);
+          await browser.close();
+          console.log(`✅ [CLOSE ALL] Browser closed for proxy ${proxyServer}`);
+        } catch (error: any) {
+          console.error(`⚠️ [CLOSE ALL] Error closing browser for ${proxyServer}: ${error.message}`);
+        }
+      }
+    }
+
+    // Close all non-proxy contexts
+    for (let i = 0; i < this.nonProxyBrowserContexts.length; i++) {
+      const context = this.nonProxyBrowserContexts[i];
+      if (context) {
+        try {
+          console.log(`🔌 [CLOSE ALL] Closing non-proxy context ${i + 1}...`);
+          await context.close();
+          console.log(`✅ [CLOSE ALL] Non-proxy context ${i + 1} closed`);
+        } catch (error: any) {
+          console.error(`⚠️ [CLOSE ALL] Error closing non-proxy context ${i + 1}: ${error.message}`);
+        }
+      }
+    }
+
+    // Close non-proxy browser instance
+    if (this.nonProxyBrowserInstance) {
+      try {
+        console.log(`🔌 [CLOSE ALL] Closing non-proxy browser instance...`);
+        await this.nonProxyBrowserInstance.close();
+        console.log(`✅ [CLOSE ALL] Non-proxy browser closed`);
+      } catch (error: any) {
+        console.error(`⚠️ [CLOSE ALL] Error closing non-proxy browser: ${error.message}`);
+      }
+    }
+
+    // Clear all pools and tracking
+    this.browserPool.clear();
+    this.contextPool.clear();
+    this.activeProxiesWithContexts.clear();
+    this.proxyContextCreationOrder = [];
+    this.nonProxyBrowserContexts = [];
+    this.nonProxyBrowserInstance = null;
+    this.proxyIndex = 0;
+    this.proxyContextIndex = 0;
+    this.nonProxyContextIndex = 0;
+    this.currentProxyServer = '';
+
+    console.log(`✅ [CLOSE ALL] All browser contexts and instances closed successfully`);
+  }
+
+  /**
    * Get the current proxy server being used
    */
   static getCurrentProxyServer(): string {

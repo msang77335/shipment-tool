@@ -7,6 +7,7 @@ import cron, { ScheduledTask } from 'node-cron';
 import { proxyManager } from '../proxy';
 import { trackingHistManager } from '../jnt/trackingHist';
 import { jntTrackingHistDb } from '../../database/jntTrackingHist';
+import { PlaywrightBrowserSingleton } from '../browser/PlaywrightBrowserSingleton';
 
 class Scheduler {
   private replaceProxiesTask: ScheduledTask | null = null;
@@ -217,6 +218,10 @@ class Scheduler {
     try {
       const timestamp = new Date().toISOString();
       console.log(`⏰ [SCHEDULER] Executing reload proxies from webshare at ${timestamp}`);
+
+      // Close all browser contexts using proxies before reloading
+      console.log(`🔌 [SCHEDULER] Closing all browser contexts using proxies`);
+      await PlaywrightBrowserSingleton.closeAllContexts();
 
       await proxyManager.initializeWebshare();
 
