@@ -36,6 +36,10 @@ export interface EnvConfig {
   // Browser Services
   browserlessApiToken?: string;
 
+  // Telegram Services
+  telegramBotToken?: string;
+  telegramChatId?: string;
+
   // Proxy Services
   proxies: ProxyConfig[];
 
@@ -97,6 +101,10 @@ export function getEnv(): EnvConfig {
     // Browser Services
     browserlessApiToken: process.env.BROWSERLESS_API_TOKEN || undefined,
 
+    // Telegram Services
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || undefined,
+    telegramChatId: process.env.TELEGRAM_CHAT_ID || undefined,
+
     // API Key for accessing the API
     xApiKey: process.env.X_API_KEY || undefined,
 
@@ -142,6 +150,8 @@ console.log('✅ Environment configuration loaded:', {
   hasCaptchaSolverApiKey: !!env.captchaSolverApiKey,
   hasGeminiApiKey: !!env.geminiApiKey,
   hasBrowserlessApiToken: !!env.browserlessApiToken,
+  hasTelegramBotToken: !!env.telegramBotToken,
+  hasTelegramChatId: !!env.telegramChatId,
   hasXApiKey: !!env.xApiKey,
   webShareApiKey: !!env.webshareApiKey,
 }); 

@@ -8,6 +8,9 @@ import { proxyManager } from '../proxy';
 import { trackingHistManager } from '../jnt/trackingHist';
 import { jntTrackingHistDb } from '../../database/jntTrackingHist';
 import { PlaywrightBrowserSingleton } from '../browser/PlaywrightBrowserSingleton';
+import { phoneManager } from '../jnt/phone';
+import { env } from '../env';
+import axios from 'axios';
 
 class Scheduler {
   private replaceProxiesTask: ScheduledTask | null = null;
@@ -15,6 +18,7 @@ class Scheduler {
   private cleanupTask: ScheduledTask | null = null;
   private processOldestEntryTask: ScheduledTask | null = null;
   private reloadProxiesFromWebshareTask: ScheduledTask | null = null;
+  private exportPhonesToTelegramTask: ScheduledTask | null = null;
   private isRunning: boolean = false;
 
   /**
@@ -43,6 +47,9 @@ class Scheduler {
 
     // Schedule reload proxies from webshare at 2 AM Vietnam time
     this.scheduleReloadProxiesFromWebshare();
+
+    // Schedule export phones to telegram at 3 AM Vietnam time
+    this.scheduleExportPhonesToTelegram();
   }
 
   // Schedule automatic proxy replacement from blacklist
@@ -228,6 +235,89 @@ class Scheduler {
       console.log(`✅ [SCHEDULER] Reload proxies from webshare completed`);
     } catch (error) {
       console.error(`❌ [SCHEDULER] Error during reload proxies from webshare:`, error);
+    }
+  }
+
+  /**
+   * Schedule export phones to telegram
+   * Runs every day at 3 AM Vietnam time (UTC+7) using cron pattern
+   */
+  private scheduleExportPhonesToTelegram(): void {
+    const CRON_PATTERN = '0 3 * * *'; // 3 AM Vietnam time
+
+    console.log(`🔄 [SCHEDULER] Scheduling export phones to telegram (${CRON_PATTERN})`);
+
+    this.exportPhonesToTelegramTask = cron.schedule(CRON_PATTERN, () => {
+      this.executeExportPhonesToTelegram();
+    }, {
+      timezone: 'Asia/Ho_Chi_Minh' // Vietnam timezone (UTC+7)
+    });
+
+    console.log('✅ [SCHEDULER] Export phones to telegram task scheduled');
+  }
+
+  /**
+   * Execute export phones to telegram
+   * Exports all phones from phone manager and sends to Telegram as CSV file
+   */
+  private async executeExportPhonesToTelegram(): Promise<void> {
+    try {
+      const timestamp = new Date().toISOString();
+      console.log(`⏰ [SCHEDULER] Executing export phones to telegram at ${timestamp}`);
+
+      const rows = await phoneManager.exportPhones();
+
+      if (rows.length === 0) {
+        console.log(`⚠️  [SCHEDULER] No phones to export`);
+        return;
+      }
+
+      // Generate CSV content
+      let csvContent = 'Seller,Phone 1,Phone 2,Phone 3,Phone 4,Phone 5\n';
+      for (const row of rows) {
+        const escapedRow = row.map(cell => {
+          // Escape quotes and wrap in quotes if contains comma
+          const escaped = String(cell).replaceAll('"', '""');
+          return escaped.includes(',') ? `"${escaped}"` : escaped;
+        });
+        csvContent += escapedRow.join(',') + '\n';
+      }
+
+      const csvBuffer = Buffer.from(csvContent, 'utf-8');
+      const fileName = `jnt_phones_${new Date().toISOString().split('T')[0]}.csv`;
+
+      // Send to Telegram
+      const botToken = env.telegramBotToken;
+      const chatId = env.telegramChatId;
+
+      if (!botToken || !chatId) {
+        console.warn(`⚠️  [SCHEDULER] Telegram credentials not configured (TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing)`);
+        console.log(`✅ [SCHEDULER] Phone export completed: ${rows.length} sellers with ${rows.reduce((sum, row) => sum + row.length - 1, 0)} phones`);
+        return;
+      }
+
+      const telegramUrl = `https://api.telegram.org/bot${botToken}/sendDocument`;
+      
+      // Create FormData to send file
+      const FormData = require('form-data');
+      const form = new FormData();
+      form.append('chat_id', chatId);
+      form.append('document', csvBuffer, fileName);
+      form.append('caption', `📱 *JNT Phone Pool Export*\n\nTotal sellers: ${rows.length}\nDate: ${new Date().toLocaleString('vi-VN')}`);
+      form.append('parse_mode', 'Markdown');
+
+      const response = await axios.post(telegramUrl, form, {
+        headers: form.getHeaders(),
+        timeout: 10000
+      });
+
+      if (response.data.ok) {
+        console.log(`✅ [SCHEDULER] Phone export CSV sent to Telegram (${rows.length} sellers, ${rows.reduce((sum, row) => sum + row.length - 1, 0)} phones)`);
+      } else {
+        console.error(`❌ [SCHEDULER] Telegram send failed:`, response.data);
+      }
+    } catch (error) {
+      console.error(`❌ [SCHEDULER] Error during export phones to telegram:`, error);
     }
   }
 }

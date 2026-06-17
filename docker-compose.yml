@@ -30,6 +30,9 @@ services:
       - PROXY_LIST=${PROXY_LIST:-}
       # Webshare API key for proxy management
       - WEBSHARE_API_KEY=${WEBSHARE_API_KEY:-}
+      # Telegram bot token for notifications
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
 networks:
   automation-net:
     driver: bridge
