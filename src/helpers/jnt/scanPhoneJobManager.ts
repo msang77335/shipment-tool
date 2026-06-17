@@ -500,6 +500,12 @@ class ScanPhoneJobManager extends EventEmitter {
           return;
         }
 
+        if(!isValid && attemptCount === 9999) {
+          console.warn(`⚠️ [EVENT] Job ${jobId} reached maximum attempt count with no valid phones`);
+          await jntTrackingHistDb.markAsProcessed(ref.jntTrackingHistId);
+          return;
+        }
+
         const createJobResult = await this.createJob(result.billcode, (attemptCount + 1)  || 0);
         if (!createJobResult.success || !createJobResult.job) {
           console.warn(`⚠️ [EVENT] Failed to create follow-up scan job: ${createJobResult.error || createJobResult.message}`);
