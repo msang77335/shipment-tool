@@ -121,6 +121,11 @@ export const processingTracking = async (cellPhone: string, codes: string, proxy
         requestConfig
       );
 
+      if(response.status === 407 && response.data?.includes('Not authenticated or invalid authentication credentials')) {
+        console.error(`Proxy authentication failed for ${cellPhone} with codes ${codes}`);
+        throw new Error(`Proxy authentication failed`);
+      }
+
       if (isHtmlResponse(response.data)) {
         const parsedShipments = parseHtmlTrackingResponse(response.data);
         return convertToStandardFormat(parsedShipments);
@@ -131,6 +136,9 @@ export const processingTracking = async (cellPhone: string, codes: string, proxy
         return [];
       }
     } catch (error: any) {
+      if(error?.message === 'Proxy authentication failed') {
+        throw error; // Don't retry on proxy auth failure, as it's unlikely to succeed on subsequent attempts with the same proxy
+      }
       const isTimeout = error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT';
       if (isTimeout && attempt < PROCESSING_TRACKING_MAX_RETRIES) {
         console.log(`⏱️ Timeout on attempt ${attempt}/${PROCESSING_TRACKING_MAX_RETRIES} for ${cellPhone} with codes ${codes}, retrying...`);
@@ -145,34 +153,58 @@ export const processingTracking = async (cellPhone: string, codes: string, proxy
 };
 
 const TRACKING_BATCH_SIZE = 5;
+const PHONE_TRACKING_MAX_RETRIES = 3;
 
 export const trackWithPhones = async (phones: string[], codes: string): Promise<any[]> => {
   const codeCount = codes.split(',').filter(Boolean).length;
   const seenTrackingNumbers = new Set<string>();
   const allResults: any[] = [];
-  const proxies = proxyManager.getAllProxies();
 
   let done = false;
   for (let i = 0; i < phones.length && !done; i += TRACKING_BATCH_SIZE) {
     const batch = phones.slice(i, i + TRACKING_BATCH_SIZE);
     for (const phone of batch) {
-      const proxy = proxies.length > 0 ? proxies[Math.floor(Math.random() * proxies.length)] : null;
-      const result = await processingTracking(phone.trim(), codes, proxy);
+      let attempt = 1;
+      while (attempt <= PHONE_TRACKING_MAX_RETRIES) {
+        const proxies = proxyManager.getAllProxies();
+        const proxy = proxies.length > 0 ? proxies[Math.floor(Math.random() * proxies.length)] : null;
+        try {
+          const result = await processingTracking(phone.trim(), codes, proxy);
 
-      for (const item of (result as any[]).flat()) {
-        if (!seenTrackingNumbers.has(item.trackingNumber)) {
-          seenTrackingNumbers.add(item.trackingNumber);
-          allResults.push(item);
+          for (const item of (result as any[]).flat()) {
+            if (!seenTrackingNumbers.has(item.trackingNumber)) {
+              seenTrackingNumbers.add(item.trackingNumber);
+              allResults.push(item);
+            }
+          }
+
+          // Early exit as soon as we have results for all tracking codes
+          if (allResults.length >= codeCount) {
+            done = true;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 3500));
+          break;
+        } catch (error: any) {
+          if (error?.message === 'Proxy authentication failed') {
+            if (proxy?.server) {
+              await proxyManager.removeProxy(proxy.server);
+            }
+            if (attempt < PHONE_TRACKING_MAX_RETRIES) {
+              console.warn(`⚠️ Proxy authentication failed for ${phone}, retrying with a different proxy (${attempt}/${PHONE_TRACKING_MAX_RETRIES})`);
+              attempt += 1;
+              continue;
+            }
+          }
+
+          console.error(`Error processing tracking for ${phone} with codes ${codes}:`, error);
+          break;
         }
       }
 
-      // Early exit as soon as we have results for all tracking codes
-      if (allResults.length >= codeCount) {
-        done = true;
+      if (done) {
         break;
       }
-
-      await new Promise(resolve => setTimeout(resolve, 3500));
     }
 
     // Small delay between batches to avoid overwhelming the server
@@ -222,7 +254,7 @@ export const jntShipmentTrackingShipment = async ({ codes, bankAccountName }: { 
       const accountName = bankAccountName?.replaceAll(/\s/g, '') || '';
       await trackingHistManager.addHist(codes, accountName, "AfterShip");
     }
-    
+
     if (codes?.split(',').length > 1) {
       console.warn(`⚠️ [J&T TRACKING] Tracking failed for multiple codes: ${codes}. Falling back to AfterShip tracking.`);
       const quotaExceededPath = join(__dirname, '../../public', 'aftership-quota-exceeded.png');
