@@ -13,6 +13,7 @@ class Scheduler {
   private scanPhoneJobTask: ScheduledTask | null = null;
   private cleanupTask: ScheduledTask | null = null;
   private processOldestEntryTask: ScheduledTask | null = null;
+  private reloadProxiesFromWebshareTask: ScheduledTask | null = null;
   private isRunning: boolean = false;
 
   /**
@@ -38,6 +39,9 @@ class Scheduler {
 
     // Schedule process oldest tracking entry at minute 45 of every hour
     this.scheduleProcessOldestEntry();
+
+    // Schedule reload proxies from webshare at 2 AM Vietnam time
+    this.scheduleReloadProxiesFromWebshare();
   }
 
   // Schedule automatic proxy replacement from blacklist
@@ -184,6 +188,41 @@ class Scheduler {
       }
     } catch (error) {
       console.error(`❌ [SCHEDULER] Error during process oldest tracking entry:`, error);
+    }
+  }
+
+  /**
+   * Schedule reload proxies from webshare
+   * Runs every day at 2 AM Vietnam time (UTC+7) using cron pattern
+   */
+  private scheduleReloadProxiesFromWebshare(): void {
+    const CRON_PATTERN = '0 2 * * *'; // 2 AM Vietnam time
+
+    console.log(`🔄 [SCHEDULER] Scheduling reload proxies from webshare (${CRON_PATTERN})`);
+
+    this.reloadProxiesFromWebshareTask = cron.schedule(CRON_PATTERN, () => {
+      this.executeReloadProxiesFromWebshare();
+    }, {
+      timezone: 'Asia/Ho_Chi_Minh' // Vietnam timezone (UTC+7)
+    });
+
+    console.log('✅ [SCHEDULER] Reload proxies from webshare task scheduled');
+  }
+
+  /**
+   * Execute reload proxies from webshare
+   * Fetches and reloads all proxies from webshare API
+   */
+  private async executeReloadProxiesFromWebshare(): Promise<void> {
+    try {
+      const timestamp = new Date().toISOString();
+      console.log(`⏰ [SCHEDULER] Executing reload proxies from webshare at ${timestamp}`);
+
+      await proxyManager.initializeWebshare();
+
+      console.log(`✅ [SCHEDULER] Reload proxies from webshare completed`);
+    } catch (error) {
+      console.error(`❌ [SCHEDULER] Error during reload proxies from webshare:`, error);
     }
   }
 }
