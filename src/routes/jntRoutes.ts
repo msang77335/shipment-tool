@@ -8,12 +8,221 @@
  */
 
 import { Request, Response, Router } from 'express';
+import multer from 'multer';
 import { phoneManager } from '../helpers/jnt/phone';
 import { scanPhoneJobManager } from '../helpers/jnt/scanPhoneJobManager';
 import { trackingHistManager } from '../helpers/jnt/trackingHist';
 import { cleanupBrowserResources, launchBrowserWithProxy, proxyManager, setupPageAndNavigate } from '../helpers/proxy';
 
 const router = Router();
+const csvUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 }
+});
+
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (ch === ',' && !inQuotes) {
+      fields.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += ch;
+  }
+
+  fields.push(current.trim());
+  return fields;
+}
+
+function normalizeImportedPhone(value: string): string {
+  let normalized = value.trim();
+  if (!normalized) return '';
+
+  // Handle Excel-style formula cell values: =6540, ="06540", ='06540'
+  if (normalized.startsWith('=')) {
+    normalized = normalized.slice(1).trim();
+  }
+
+  // Remove wrapping quotes if present
+  if (normalized.startsWith('"') && normalized.endsWith('"')) {
+    normalized = normalized.slice(1, -1);
+  }
+
+  if (normalized.startsWith("'") && normalized.endsWith("'")) {
+    normalized = normalized.slice(1, -1);
+  }
+
+  return normalized.trim().replaceAll(' ', '');
+}
+
+interface CsvImportValidationError {
+  line: number;
+  field: string;
+  value: string;
+  message: string;
+}
+
+function isValidPhoneNumber(value: string): boolean {
+  return /^\d+$/.test(value);
+}
+
+function validateCsvPhoneRow(
+  seller: string,
+  phones: string[],
+  lineNo: number
+): { validPhones: string[]; errors: CsvImportValidationError[] } {
+  const rowErrors: CsvImportValidationError[] = [];
+
+  if (!seller && phones.length > 0) {
+    rowErrors.push({
+      line: lineNo,
+      field: 'seller',
+      value: '',
+      message: 'Seller is required when phone columns have data'
+    });
+    return { validPhones: [], errors: rowErrors };
+  }
+
+  if (seller && phones.length === 0) {
+    rowErrors.push({
+      line: lineNo,
+      field: 'phone',
+      value: '',
+      message: 'At least one phone is required for this seller'
+    });
+    return { validPhones: [], errors: rowErrors };
+  }
+
+  const invalidPhones = phones.filter(phone => !isValidPhoneNumber(phone));
+  if (invalidPhones.length > 0) {
+    for (const invalidPhone of invalidPhones) {
+      rowErrors.push({
+        line: lineNo,
+        field: 'phone',
+        value: invalidPhone,
+        message: 'Phone must contain digits only (0-9)'
+      });
+    }
+    return { validPhones: [], errors: rowErrors };
+  }
+
+  return { validPhones: Array.from(new Set(phones)), errors: rowErrors };
+}
+
+function buildPhoneImportPayload(csvText: string): {
+  sellerPhone: Array<{ name: string; phones: string[] }>;
+  errors: CsvImportValidationError[];
+  dataRows: number;
+} {
+  const lines = csvText
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    return {
+      sellerPhone: [],
+      errors: [{
+        line: 1,
+        field: 'file',
+        value: '',
+        message: 'CSV must include header and at least one data row'
+      }],
+      dataRows: 0
+    };
+  }
+
+  const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+  const sellerIndex = headers.indexOf('seller');
+  const phoneIndexes = headers
+    .map((h, i) => ({ h, i }))
+    .filter(({ h }) => /^phone(\s*\d+)?$/.test(h))
+    .map(({ i }) => i);
+
+  const errors: CsvImportValidationError[] = [];
+
+  if (sellerIndex === -1) {
+    errors.push({
+      line: 1,
+      field: 'header',
+      value: lines[0],
+      message: 'CSV header must include "Seller" column'
+    });
+  }
+
+  if (phoneIndexes.length === 0) {
+    errors.push({
+      line: 1,
+      field: 'header',
+      value: lines[0],
+      message: 'CSV header must include at least one "Phone" column'
+    });
+  }
+
+  if (errors.length > 0) {
+    return {
+      sellerPhone: [],
+      errors,
+      dataRows: lines.length - 1
+    };
+  }
+
+  const grouped = new Map<string, Set<string>>();
+  const dataRows = lines.length - 1;
+
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCsvLine(lines[i]);
+    const seller = (row[sellerIndex] || '').trim();
+    const lineNo = i + 1;
+
+    const normalizedPhones = phoneIndexes
+      .map(index => normalizeImportedPhone(row[index] || ''));
+    const nonEmptyPhones = normalizedPhones.filter(Boolean);
+
+    if (!seller && nonEmptyPhones.length === 0) {
+      continue;
+    }
+
+    const validation = validateCsvPhoneRow(seller, nonEmptyPhones, lineNo);
+    if (validation.errors.length > 0) {
+      errors.push(...validation.errors);
+      continue;
+    }
+
+    const existing = grouped.get(seller) || new Set<string>();
+    for (const phone of validation.validPhones) {
+      existing.add(phone);
+    }
+    grouped.set(seller, existing);
+  }
+
+  return {
+    sellerPhone: Array.from(grouped.entries()).map(([name, phoneSet]) => ({
+      name,
+      phones: Array.from(phoneSet)
+    })),
+    errors,
+    dataRows
+  };
+}
 
 /**
  * GET /api/v1/jnt/phone
@@ -104,6 +313,80 @@ router.get('/phone/export', async (req: Request, res: Response) => {
     return res.status(500).json({
       status: 'error',
       message: 'Failed to export phones',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * POST /api/v1/jnt/phone/import
+ * Import phones from CSV file with headers: Seller, Phone, Phone 2, Phone 3, ...
+ * Multipart field: file
+ */
+router.post('/phone/import', csvUpload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'CSV file is required. Use multipart/form-data with field "file"'
+      });
+    }
+
+    if (file.size === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'CSV file is empty'
+      });
+    }
+
+    const filename = file.originalname || '';
+    if (filename && !filename.toLowerCase().endsWith('.csv')) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid file type. Please upload a .csv file'
+      });
+    }
+
+    const csvText = file.buffer.toString('utf-8');
+    const { sellerPhone, errors, dataRows } = buildPhoneImportPayload(csvText);
+
+    if (errors.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'CSV validation failed',
+        totalDataRows: dataRows,
+        invalidRows: new Set(errors.map(item => item.line)).size,
+        errors
+      });
+    }
+
+    if (sellerPhone.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'No valid seller/phone rows found in CSV'
+      });
+    }
+
+    const addedPhones = await phoneManager.addPhones(sellerPhone);
+    const allPhones = await phoneManager.getAllPhones();
+    const totalPhones = allPhones.reduce((sum, group) => sum + group.phones.length, 0);
+    const importedPhoneCount = sellerPhone.reduce((sum, group) => sum + group.phones.length, 0);
+
+    return res.json({
+      status: 'success',
+      message: `Imported ${sellerPhone.length} sellers from CSV`,
+      importedSellers: sellerPhone.length,
+      importedPhones: importedPhoneCount,
+      addedCount: addedPhones.length,
+      totalPhones,
+      data: addedPhones
+    });
+  } catch (error) {
+    console.error('❌ [JNT PHONE ROUTE] Error importing phones from CSV:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to import phones from CSV',
       error: error instanceof Error ? error.message : String(error)
     });
   }
