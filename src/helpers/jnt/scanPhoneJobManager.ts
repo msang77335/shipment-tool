@@ -470,11 +470,6 @@ class ScanPhoneJobManager extends EventEmitter {
 
       const attemptCount = Number.parseInt(result.validPhones) || 0;
 
-      if (attemptCount === 0) {
-        console.log(`⚠️ [EVENT] Job ${jobId} found no valid phones, skipping post-processing`);
-        return;
-      }
-
       // Mark associated tracking history as processed
       try {
         const ref = await scanPhoneJobRefDb.getByScanPhoneJobId(jobId);
@@ -500,7 +495,7 @@ class ScanPhoneJobManager extends EventEmitter {
           return;
         }
 
-        if(!isValid && attemptCount === 9999) {
+        if(!isValid && attemptCount === 0) {
           console.warn(`⚠️ [EVENT] Job ${jobId} reached maximum attempt count with no valid phones`);
           await jntTrackingHistDb.markAsProcessed(ref.jntTrackingHistId);
           return;
